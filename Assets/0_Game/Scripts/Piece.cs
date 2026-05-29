@@ -2,12 +2,13 @@ using DG.Tweening;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
-public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragHandler, IDragHandler
+public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDragHandler, IEndDragHandler, IDragHandler
 {
     public SpriteRenderer pieceSprite;
     public SpriteRenderer spriteRenderer;
     public float flipDuration = 0.18f;
     public float pictureOverlapScale = 1.01f;
+    public float borderFadeDuration = 0.12f;
 
     public Vector2Int posInBoard;
     public PictureSO pictureSO;
@@ -24,6 +25,7 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
     int defOrder;
     Transform dragTransform;
     PieceGroup dragGroup;
+    PieceGroup pointerDownGroup;
     Vector3 dragStartPosition;
 
     public SpriteRenderer[] borders;
@@ -170,15 +172,10 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
 
     public void OnPointerDown(PointerEventData eventData)
     {
-        if (IngameManager.ins != null && IngameManager.ins.IsInputLocked)
+        pointerDownGroup = GetCurrentGroup();
+        if (pointerDownGroup != null)
         {
-            return;
-        }
-
-        PieceGroup group = GetCurrentGroup();
-        if (group != null)
-        {
-            SetGroupOrderOffset(group, 100);
+            SetGroupOrderOffset(pointerDownGroup, 100);
         }
         else
         {
@@ -186,6 +183,11 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
         }
 
         Debug.Log("OnPointerDown: " + posInBoard);
+    }
+
+    public void OnPointerUp(PointerEventData eventData)
+    {
+        ResetPointerDownOrder();
     }
 
     public void OnBeginDrag(PointerEventData eventData)
@@ -222,17 +224,11 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
     {
         if (dragTransform == null)
         {
+            ResetPointerDownOrder();
             return;
         }
 
-        if (dragGroup != null)
-        {
-            ResetGroupOrder(dragGroup);
-        }
-        else
-        {
-            ResetOrder();
-        }
+        ResetPointerDownOrder();
 
         Vector2Int targetCell;
         if (IngameManager.ins != null && IngameManager.ins.GetNearestCell(transform.position, this, dragGroup, out targetCell))
@@ -254,6 +250,18 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
         MoveDragTransformBack();
         dragTransform = null;
         dragGroup = null;
+    }
+
+    void ResetPointerDownOrder()
+    {
+        if (pointerDownGroup != null)
+        {
+            ResetGroupOrder(pointerDownGroup);
+            pointerDownGroup = null;
+            return;
+        }
+
+        ResetOrder();
     }
 
     Vector3 GetPointerWorldPosition(PointerEventData eventData)
@@ -310,7 +318,29 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
         SpriteRenderer border = GetBorder(direction);
         if (border != null)
         {
-            border.gameObject.SetActive(visible);
+            border.DOKill();
+            if (visible)
+            {
+                if (border.gameObject.activeSelf && border.color.a >= 0.99f)
+                {
+                    return;
+                }
+
+                border.gameObject.SetActive(true);
+                Color color = border.color;
+                color.a = 1f;
+                border.color = color;
+                return;
+            }
+
+            if (!border.gameObject.activeSelf)
+            {
+                return;
+            }
+
+            border.DOFade(0f, borderFadeDuration)
+                .SetEase(Ease.OutQuad)
+                .OnComplete(() => border.gameObject.SetActive(false));
         }
     }
 

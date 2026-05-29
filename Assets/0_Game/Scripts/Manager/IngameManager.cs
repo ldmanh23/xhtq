@@ -13,7 +13,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     public bool playSpawnFlip = true;
     public float flipDelayEachPiece = 0.02f;
     const float PieceMoveDuration = 0.17f;
-    const float CompleteClearDuration = 0.5f;
+    const float CompleteClearDuration = 0.35f;
 
     public Piece[,] pieces;
     Queue<SpawnPieceData>[] columnDecks;
@@ -563,7 +563,6 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
         List<HashSet<string>> oldGroupSets = GetActiveGroupStateSets();
         ClearGroups();
-        ResetAllPieceBorders();
 
         HashSet<Piece> visited = new HashSet<Piece>();
 
@@ -585,6 +584,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             }
         }
 
+        UpdateAllPieceBorders();
         CheckCompletedGroups();
     }
 
@@ -600,6 +600,8 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             RebuildGroups();
             if (!isResolvingComplete)
             {
+                CheckWin();
+
                 IsInputLocked = false;
             }
             rebuildTween = null;
@@ -918,10 +920,9 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             PlayGroupMergeScaleWhenStable(group);
         }
 
-        HideInnerBorders(groupPieces);
     }
 
-    void ResetAllPieceBorders()
+    void UpdateAllPieceBorders()
     {
         if (pieces == null)
         {
@@ -934,45 +935,32 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             {
                 if (pieces[x, y] != null)
                 {
-                    pieces[x, y].ResetBorders();
+                    UpdatePieceBorders(pieces[x, y]);
                 }
             }
         }
     }
 
-    void HideInnerBorders(List<Piece> groupPieces)
+    void UpdatePieceBorders(Piece piece)
     {
-        for (int i = 0; i < groupPieces.Count; i++)
-        {
-            Piece piece = groupPieces[i];
-            if (piece == null)
-            {
-                continue;
-            }
-
-            HideBorderIfGrouped(piece, Vector2Int.up);
-            HideBorderIfGrouped(piece, Vector2Int.right);
-            HideBorderIfGrouped(piece, Vector2Int.down);
-            HideBorderIfGrouped(piece, Vector2Int.left);
-        }
+        SetBorderByNeighbor(piece, Vector2Int.up);
+        SetBorderByNeighbor(piece, Vector2Int.right);
+        SetBorderByNeighbor(piece, Vector2Int.down);
+        SetBorderByNeighbor(piece, Vector2Int.left);
     }
 
-    void HideBorderIfGrouped(Piece piece, Vector2Int direction)
+    void SetBorderByNeighbor(Piece piece, Vector2Int direction)
     {
         Vector2Int neighborCell = piece.posInBoard + direction;
         if (!IsInBoard(neighborCell))
         {
+            piece.SetBorderVisible(direction, true);
             return;
         }
 
         Piece neighbor = pieces[neighborCell.x, neighborCell.y];
-        if (neighbor == null || !CanGroup(piece, neighbor))
-        {
-            return;
-        }
-
-        piece.SetBorderVisible(direction, false);
-        neighbor.SetBorderVisible(-direction, false);
+        bool shouldHide = neighbor != null && CanGroup(piece, neighbor);
+        piece.SetBorderVisible(direction, !shouldHide);
     }
 
     List<HashSet<string>> GetActiveGroupStateSets()
@@ -1104,6 +1092,40 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
         return boardParent != null ? boardParent.TransformPoint(localPosition) : localPosition;
     }
-    
-    //Drag drop
+
+    public bool IsWin()
+    {
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (pieces[x, y] != null)
+                {
+                    return false;
+                }
+            }
+        }
+
+        if (columnDecks != null)
+        {
+            for (int i = 0; i < columnDecks.Length; i++)
+            {
+                if (columnDecks[i] != null && columnDecks[i].Count > 0)
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    public void CheckWin()
+    {
+        if (IsWin())
+        {
+            Debug.Log("You win!");
+        }
+    }
 }
+
