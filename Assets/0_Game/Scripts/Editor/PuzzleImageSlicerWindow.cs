@@ -5,6 +5,7 @@ using UnityEngine;
 public class PuzzleImageSlicerWindow : EditorWindow
 {
     private Texture2D sourceTexture;
+    private Piece piecePrefab;
     private int pictureId;
     private int columns = 2;
     private int rows = 2;
@@ -21,6 +22,7 @@ public class PuzzleImageSlicerWindow : EditorWindow
     private void OnGUI()
     {
         sourceTexture = (Texture2D)EditorGUILayout.ObjectField("Source Image", sourceTexture, typeof(Texture2D), false);
+        piecePrefab = (Piece)EditorGUILayout.ObjectField("Piece Prefab", piecePrefab, typeof(Piece), false);
         pictureId = EditorGUILayout.IntField("Picture Id", pictureId);
         columns = Mathf.Max(1, EditorGUILayout.IntField("Width Pieces", columns));
         rows = Mathf.Max(1, EditorGUILayout.IntField("Height Pieces", rows));
@@ -66,14 +68,18 @@ public class PuzzleImageSlicerWindow : EditorWindow
         Directory.CreateDirectory(outputFolder);
         AssetDatabase.Refresh();
 
+        Vector2 pieceLocalSize = GetPieceLocalSize();
+        float targetAspect = (columns * pieceLocalSize.x) / (rows * pieceLocalSize.y);
+
         int cropWidth;
         int cropHeight;
-        GetCropSize(sourceTexture.width, sourceTexture.height, columns, rows, out cropWidth, out cropHeight);
+        GetCropSize(sourceTexture.width, sourceTexture.height, targetAspect, columns, rows, out cropWidth, out cropHeight);
 
         int startX = (sourceTexture.width - cropWidth) / 2;
         int startY = (sourceTexture.height - cropHeight) / 2;
         int pieceWidth = cropWidth / columns;
         int pieceHeight = cropHeight / rows;
+        float piecePixelsPerUnit = GetPixelsPerUnit(pieceWidth, pieceHeight, pieceLocalSize);
 
         PictureSO pictureSO = CreateInstance<PictureSO>();
         pictureSO.pictureId = pictureId;
@@ -100,7 +106,7 @@ public class PuzzleImageSlicerWindow : EditorWindow
                 DestroyImmediate(pieceTexture);
 
                 AssetDatabase.ImportAsset(piecePath);
-                SetupSpriteImporter(piecePath);
+                SetupSpriteImporter(piecePath, piecePixelsPerUnit);
 
                 Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(piecePath);
                 pictureSO.pieces.Add(new PieceSpriteData
@@ -111,7 +117,7 @@ public class PuzzleImageSlicerWindow : EditorWindow
             }
         }
 
-        SetupSpriteImporter(sourcePath);
+        SetupSpriteImporter(sourcePath, pixelsPerUnit);
         pictureSO.fullSprite = AssetDatabase.LoadAssetAtPath<Sprite>(sourcePath);
 
         EnsureFolder(soOutputRoot);
@@ -162,9 +168,36 @@ public class PuzzleImageSlicerWindow : EditorWindow
         AssetDatabase.Refresh();
     }
 
-    private void GetCropSize(int sourceWidth, int sourceHeight, int targetColumns, int targetRows, out int cropWidth, out int cropHeight)
+    private Vector2 GetPieceLocalSize()
     {
-        float targetAspect = (float)targetColumns / targetRows;
+        SpriteRenderer targetSprite = null;
+        if (piecePrefab != null)
+        {
+            targetSprite = piecePrefab.pieceSprite != null ? piecePrefab.pieceSprite : piecePrefab.spriteRenderer;
+        }
+
+        if (targetSprite == null || targetSprite.sprite == null)
+        {
+            return Vector2.one;
+        }
+
+        return targetSprite.sprite.bounds.size;
+    }
+
+    private float GetPixelsPerUnit(int pieceWidth, int pieceHeight, Vector2 pieceLocalSize)
+    {
+        if (pieceLocalSize.x <= 0f || pieceLocalSize.y <= 0f)
+        {
+            return pixelsPerUnit;
+        }
+
+        float ppuX = pieceWidth / pieceLocalSize.x;
+        float ppuY = pieceHeight / pieceLocalSize.y;
+        return Mathf.Max(1f, Mathf.Max(ppuX, ppuY));
+    }
+
+    private void GetCropSize(int sourceWidth, int sourceHeight, float targetAspect, int targetColumns, int targetRows, out int cropWidth, out int cropHeight)
+    {
         float sourceAspect = (float)sourceWidth / sourceHeight;
 
         if (sourceAspect > targetAspect)
@@ -182,7 +215,7 @@ public class PuzzleImageSlicerWindow : EditorWindow
         cropHeight = Mathf.Max(targetRows, cropHeight / targetRows * targetRows);
     }
 
-    private void SetupSpriteImporter(string assetPath)
+    private void SetupSpriteImporter(string assetPath, float spritePixelsPerUnit)
     {
         TextureImporter importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
         if (importer == null)
@@ -192,7 +225,7 @@ public class PuzzleImageSlicerWindow : EditorWindow
 
         importer.textureType = TextureImporterType.Sprite;
         importer.spriteImportMode = SpriteImportMode.Single;
-        importer.spritePixelsPerUnit = pixelsPerUnit;
+        importer.spritePixelsPerUnit = spritePixelsPerUnit;
         importer.mipmapEnabled = false;
         importer.alphaIsTransparency = true;
         importer.SaveAndReimport();

@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   pictureId: 0
   pictureName: (102)
-  size: {x: 4, y: 1}
+  size: {x: 3, y: 2}
   fullSprite: {fileID: 21300000, guid: 7d203f306ac45664eb2e6cc9b564b6aa, type: 3}
   pieces:
   - localCell: {x: 0, y: 0}
@@ -23,5 +23,9 @@ MonoBehaviour:
     sprite: {fileID: 21300000, guid: f797f630763a9d345a284205bca2ae56, type: 3}
   - localCell: {x: 2, y: 0}
     sprite: {fileID: 21300000, guid: 2e3c46a739c3e5c46a67ffbec59614a9, type: 3}
-  - localCell: {x: 3, y: 0}
-    sprite: {fileID: 21300000, guid: b0d563c945d21024ea3f246f09383c6d, type: 3}
+  - localCell: {x: 0, y: 1}
+    sprite: {fileID: 21300000, guid: 3c30d457ebfc33f43b15d83f3b7c231c, type: 3}
+  - localCell: {x: 1, y: 1}
+    sprite: {fileID: 21300000, guid: aba22328129b4284e8fb189736e372ff, type: 3}
+  - localCell: {x: 2, y: 1}
+    sprite: {fileID: 21300000, guid: e614feea538cb8643a919fe09056607e, type: 3}

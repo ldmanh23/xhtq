@@ -200,9 +200,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e9948150e6f6c6c469030cd1f3142e43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  curLevel: {fileID: 11400000, guid: fb2f04ce5e4a09647bec181b49ad3fb6, type: 2}
   piecePrb: {fileID: 14333254886014222, guid: ca706da825281f6418bcbfd5dd222169, type: 3}
   height: 6
   width: 6
+  playSpawnFlip: 1
+  flipDelayEachPiece: 0.02
 --- !u!4 &561290246
 Transform:
   m_ObjectHideFlags: 0

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class IngameManager : MonoBehaviour
@@ -7,8 +8,17 @@ public class IngameManager : MonoBehaviour
     public Piece piecePrb;
     public int height = 6;
     public int width = 6;
+    public bool playSpawnFlip = true;
+    public float flipDelayEachPiece = 0.02f;
 
     public Piece[,] pieces;
+
+    struct SpawnPieceData
+    {
+        public PictureSO pictureSO;
+        public Vector2Int localCell;
+        public Sprite sprite;
+    }
 
     private void Start()
     {
@@ -17,9 +27,27 @@ public class IngameManager : MonoBehaviour
 
     public void BuildBoard()
     {
+        if (curLevel == null || piecePrb == null)
+        {
+            Debug.LogError("Missing level or piece prefab.");
+            return;
+        }
+
         pieces = new Piece[curLevel.boardSize.x, curLevel.boardSize.y];
         width = curLevel.boardSize.x;
         height = curLevel.boardSize.y;
+
+        List<SpawnPieceData> spawnPieces = BuildSpawnPieces();
+        if (spawnPieces.Count == 0)
+        {
+            Debug.LogError("Level has no valid picture pieces.");
+            return;
+        }
+
+        if (curLevel.shufflePieces)
+        {
+            Shuffle(spawnPieces);
+        }
 
         Vector2 pieceSize = GetPieceSize(piecePrb);
         Vector2 boardOffset = new Vector2(
@@ -27,10 +55,18 @@ public class IngameManager : MonoBehaviour
             (height - 1) * pieceSize.y * 0.5f
         );
 
+        int spawnCount = GetSpawnCount(spawnPieces.Count);
+        int spawnIndex = 0;
+
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
             {
+                if (spawnIndex >= spawnCount)
+                {
+                    return;
+                }
+
                 Piece piece = SimplePool.Spawn<Piece>(piecePrb);
 
                 piece.transform.localPosition = new Vector3(
@@ -39,8 +75,64 @@ public class IngameManager : MonoBehaviour
                     0
                 );
 
-                pieces[x, y] = piece;  
+                SpawnPieceData data = spawnPieces[spawnIndex];
+                float delay = spawnIndex * flipDelayEachPiece;
+                piece.Setup(data.pictureSO, data.localCell, data.sprite, x, y, playSpawnFlip, delay);
+
+                pieces[x, y] = piece;
+                spawnIndex++;
             }
+        }
+    }
+
+    int GetSpawnCount(int availablePieceCount)
+    {
+        int boardCapacity = width * height;
+        int requestedCount = curLevel.initialPieceCount > 0 ? curLevel.initialPieceCount : boardCapacity;
+        return Mathf.Min(requestedCount, boardCapacity, availablePieceCount);
+    }
+
+    List<SpawnPieceData> BuildSpawnPieces()
+    {
+        List<SpawnPieceData> spawnPieces = new List<SpawnPieceData>();
+
+        for (int i = 0; i < curLevel.pictures.Count; i++)
+        {
+            PictureSO picture = curLevel.pictures[i];
+            if (picture == null)
+
+            {
+                continue;
+            }
+
+            for (int j = 0; j < picture.pieces.Count; j++)
+            {
+                PieceSpriteData pieceData = picture.pieces[j];
+                if (pieceData == null || pieceData.sprite == null)
+                {
+                    continue;
+                }
+
+                spawnPieces.Add(new SpawnPieceData
+                {
+                    pictureSO = picture,
+                    localCell = pieceData.localCell,
+                    sprite = pieceData.sprite
+                });
+            }
+        }
+
+        return spawnPieces;
+    }
+
+    void Shuffle<T>(List<T> list)
+    {
+        for (int i = list.Count - 1; i > 0; i--)
+        {
+            int randomIndex = Random.Range(0, i + 1);
+            T temp = list[i];
+            list[i] = list[randomIndex];
+            list[randomIndex] = temp;
         }
     }
 
