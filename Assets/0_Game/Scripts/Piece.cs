@@ -20,6 +20,9 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
     Vector3 snapPosition;
     float dragZ;
     int defOrder;
+    Transform dragTransform;
+    PieceGroup dragGroup;
+    Vector3 dragStartPosition;
 
     public SpriteRenderer[] borders;
 
@@ -90,6 +93,7 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
 
     public void MoveToSnapPosition()
     {
+        transform.DOKill();
         spriteRenderer.sortingOrder += 7;
         for (int i = 0; i < borders.Length; i++)
         {
@@ -151,39 +155,90 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
 
     public void OnPointerDown(PointerEventData eventData)
     {
-        spriteRenderer.sortingOrder += 10;
-        for (int i = 0; i < borders.Length; i++)
+        if (IngameManager.ins != null && IngameManager.ins.IsInputLocked)
         {
-            borders[i].sortingOrder = spriteRenderer.sortingOrder + 1;
+            return;
         }
+
+        PieceGroup group = GetCurrentGroup();
+        if (group != null)
+        {
+            SetGroupOrderOffset(group, 100);
+        }
+        else
+        {
+            SetOrderOffset(100);
+        }
+
         Debug.Log("OnPointerDown: " + posInBoard);
     }
 
     public void OnBeginDrag(PointerEventData eventData)
     {
-        dragZ = transform.position.z;
-        dragOffset = transform.position - GetPointerWorldPosition(eventData);
+        if (IngameManager.ins != null && IngameManager.ins.IsInputLocked)
+        {
+            ResetOrder();
+            dragTransform = null;
+            dragGroup = null;
+            return;
+        }
+
+        dragGroup = GetCurrentGroup();
+        dragTransform = dragGroup != null ? dragGroup.transform : transform;
+        dragTransform.DOKill();
+        dragStartPosition = dragTransform.position;
+        dragZ = dragTransform.position.z;
+        dragOffset = dragTransform.position - GetPointerWorldPosition(eventData);
     }
 
     public void OnDrag(PointerEventData eventData)
     {
+        if (dragTransform == null || (IngameManager.ins != null && IngameManager.ins.IsInputLocked))
+        {
+            return;
+        }
+
         Vector3 targetPosition = GetPointerWorldPosition(eventData) + dragOffset;
         targetPosition.z = dragZ;
-        transform.position = targetPosition;
+        dragTransform.position = targetPosition;
     }
 
     public void OnEndDrag(PointerEventData eventData)
     {
-        ResetOrder();
-
-        Piece targetPiece = IngameManager.ins != null ? IngameManager.ins.GetNearestPiece(transform.position, this) : null;
-        if (targetPiece != null)
+        if (dragTransform == null)
         {
-            IngameManager.ins.SwapPieces(this, targetPiece);
             return;
         }
 
-        MoveToSnapPosition();
+        if (dragGroup != null)
+        {
+            ResetGroupOrder(dragGroup);
+        }
+        else
+        {
+            ResetOrder();
+        }
+
+        Piece targetPiece = IngameManager.ins != null ? IngameManager.ins.GetNearestPiece(transform.position, this, dragGroup) : null;
+        if (targetPiece != null)
+        {
+            if (dragGroup != null)
+            {
+                IngameManager.ins.SwapGroup(dragGroup, this, targetPiece);
+            }
+            else
+            {
+                IngameManager.ins.SwapPieces(this, targetPiece);
+            }
+
+            dragTransform = null;
+            dragGroup = null;
+            return;
+        }
+
+        MoveDragTransformBack();
+        dragTransform = null;
+        dragGroup = null;
     }
 
     Vector3 GetPointerWorldPosition(PointerEventData eventData)
@@ -206,5 +261,63 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
         {
             borders[i].sortingOrder = spriteRenderer.sortingOrder + 1;
         }
+    }
+
+    void SetOrderOffset(int offset)
+    {
+        spriteRenderer.sortingOrder = defOrder + offset;
+        for (int i = 0; i < borders.Length; i++)
+        {
+            borders[i].sortingOrder = spriteRenderer.sortingOrder + 1;
+        }
+    }
+
+    void SetGroupOrderOffset(PieceGroup group, int offset)
+    {
+        for (int i = 0; i < group.pieces.Count; i++)
+        {
+            if (group.pieces[i] != null)
+            {
+                group.pieces[i].SetOrderOffset(offset);
+            }
+        }
+    }
+
+    void ResetGroupOrder(PieceGroup group)
+    {
+        for (int i = 0; i < group.pieces.Count; i++)
+        {
+            if (group.pieces[i] != null)
+            {
+                group.pieces[i].ResetOrder();
+            }
+        }
+    }
+
+    PieceGroup GetCurrentGroup()
+    {
+        return transform.parent != null ? transform.parent.GetComponent<PieceGroup>() : null;
+    }
+
+    void MoveDragTransformBack()
+    {
+        if (dragGroup != null && dragTransform != null)
+        {
+            if (IngameManager.ins != null)
+            {
+                IngameManager.ins.LockInputForMove();
+            }
+
+            dragTransform.DOKill();
+            dragTransform.DOMove(dragStartPosition, 0.15f).SetEase(Ease.OutQuad);
+            return;
+        }
+
+        if (IngameManager.ins != null)
+        {
+            IngameManager.ins.LockInputForMove();
+        }
+
+        MoveToSnapPosition();
     }
 }
