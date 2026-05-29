@@ -69,6 +69,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         );
 
         int spawnCount = GetSpawnCount(spawnPieces.Count);
+        EnsureOneCompletePictureInBoard(spawnPieces, spawnCount);
         BuildColumnDecks(spawnPieces, spawnCount);
         int spawnIndex = 0;
 
@@ -191,6 +192,68 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
         int sizeCount = picture.size.x * picture.size.y;
         return sizeCount > 0 ? sizeCount : picture.pieces.Count;
+    }
+
+    void EnsureOneCompletePictureInBoard(List<SpawnPieceData> spawnPieces, int boardPieceCount)
+    {
+        PictureSO selectedPicture = FindCompletePictureForBoard(spawnPieces, boardPieceCount);
+        if (selectedPicture == null)
+        {
+            return;
+        }
+
+        List<SpawnPieceData> selectedPieces = new List<SpawnPieceData>();
+        List<SpawnPieceData> otherPieces = new List<SpawnPieceData>();
+
+        for (int i = 0; i < spawnPieces.Count; i++)
+        {
+            if (spawnPieces[i].pictureSO == selectedPicture)
+            {
+                selectedPieces.Add(spawnPieces[i]);
+            }
+            else
+            {
+                otherPieces.Add(spawnPieces[i]);
+            }
+        }
+
+        spawnPieces.Clear();
+        spawnPieces.AddRange(selectedPieces);
+        spawnPieces.AddRange(otherPieces);
+    }
+
+    PictureSO FindCompletePictureForBoard(List<SpawnPieceData> spawnPieces, int boardPieceCount)
+    {
+        for (int i = 0; i < spawnPieces.Count; i++)
+        {
+            PictureSO picture = spawnPieces[i].pictureSO;
+            if (picture == null)
+            {
+                continue;
+            }
+
+            int pieceCount = GetPicturePieceCount(picture);
+            if (pieceCount <= boardPieceCount && CountPiecesOfPicture(spawnPieces, picture) >= pieceCount)
+            {
+                return picture;
+            }
+        }
+
+        return null;
+    }
+
+    int CountPiecesOfPicture(List<SpawnPieceData> spawnPieces, PictureSO picture)
+    {
+        int count = 0;
+        for (int i = 0; i < spawnPieces.Count; i++)
+        {
+            if (spawnPieces[i].pictureSO == picture)
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     public Piece GetNearestPiece(Vector3 position, Piece ignorePiece)
@@ -498,7 +561,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             return;
         }
 
-        List<HashSet<string>> oldGroupSets = GetActiveGroupSets();
+        List<HashSet<string>> oldGroupSets = GetActiveGroupStateSets();
         ClearGroups();
 
         HashSet<Piece> visited = new HashSet<Piece>();
@@ -855,7 +918,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         }
     }
 
-    List<HashSet<string>> GetActiveGroupSets()
+    List<HashSet<string>> GetActiveGroupStateSets()
     {
         List<HashSet<string>> sets = new List<HashSet<string>>();
         for (int i = 0; i < activeGroups.Count; i++)
@@ -863,7 +926,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             PieceGroup group = activeGroups[i];
             if (group != null && group.pieces.Count >= 2)
             {
-                sets.Add(BuildGroupIdSet(group.pieces));
+                sets.Add(BuildGroupStateSet(group.pieces));
             }
         }
 
@@ -885,9 +948,25 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         return ids;
     }
 
+    HashSet<string> BuildGroupStateSet(List<Piece> groupPieces)
+    {
+        HashSet<string> states = new HashSet<string>();
+        for (int i = 0; i < groupPieces.Count; i++)
+        {
+            Piece piece = groupPieces[i];
+            if (piece != null)
+            {
+                states.Add(piece.pictureId + "_" + piece.localCell.x + "_" + piece.localCell.y
+                    + "_" + piece.posInBoard.x + "_" + piece.posInBoard.y);
+            }
+        }
+
+        return states;
+    }
+
     bool ShouldScaleNewGroup(List<Piece> groupPieces, List<HashSet<string>> oldGroupSets)
     {
-        HashSet<string> newSet = BuildGroupIdSet(groupPieces);
+        HashSet<string> newSet = BuildGroupStateSet(groupPieces);
         for (int i = 0; i < oldGroupSets.Count; i++)
         {
             if (newSet.SetEquals(oldGroupSets[i]))
