@@ -2,6 +2,8 @@ using UnityEngine;
 
 public class IngameManager : MonoBehaviour
 {
+    public LevelSO curLevel;
+
     public Piece piecePrb;
     public int height = 6;
     public int width = 6;
@@ -15,7 +17,9 @@ public class IngameManager : MonoBehaviour
 
     public void BuildBoard()
     {
-        pieces = new Piece[width, height];
+        pieces = new Piece[curLevel.boardSize.x, curLevel.boardSize.y];
+        width = curLevel.boardSize.x;
+        height = curLevel.boardSize.y;
 
         Vector2 pieceSize = GetPieceSize(piecePrb);
         Vector2 boardOffset = new Vector2(
@@ -35,7 +39,7 @@ public class IngameManager : MonoBehaviour
                     0
                 );
 
-                pieces[x, y] = piece;
+                pieces[x, y] = piece;  
             }
         }
     }
