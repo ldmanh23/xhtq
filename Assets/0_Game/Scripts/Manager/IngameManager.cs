@@ -13,7 +13,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     public bool playSpawnFlip = true;
     public float flipDelayEachPiece = 0.02f;
     const float PieceMoveDuration = 0.17f;
-    const float CompleteClearDuration = 0.2f;
+    const float CompleteClearDuration = 0.5f;
 
     public Piece[,] pieces;
     readonly List<PieceGroup> activeGroups = new List<PieceGroup>();
@@ -773,7 +773,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             groupPieces[i].transform.SetParent(group.transform, true);
         }
 
-        if (ShouldScaleNewGroup(groupPieces, oldGroupSets))
+        if (!IsCompletedGroup(group) && ShouldScaleNewGroup(groupPieces, oldGroupSets))
         {
             PlayGroupMergeScaleWhenStable(group);
         }
@@ -854,7 +854,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     {
         DOVirtual.DelayedCall(0.02f, () =>
         {
-            if (group != null && activeGroups.Contains(group))
+            if (group != null && activeGroups.Contains(group) && !IsCompletedGroup(group))
             {
                 PlayGroupMergeScale(group);
             }
