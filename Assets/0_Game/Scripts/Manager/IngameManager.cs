@@ -151,5 +151,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             spriteSize.x * scale.x,
             spriteSize.y * scale.y
         );
-    }    
+    }
+    
+    //Drag drop
 }

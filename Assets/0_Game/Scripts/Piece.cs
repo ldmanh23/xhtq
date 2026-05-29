@@ -1,7 +1,8 @@
-using System.Collections;
+using DG.Tweening;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
-public class Piece : GameUnit
+public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragHandler, IDragHandler
 {
     public SpriteRenderer pieceSprite;
     public SpriteRenderer spriteRenderer;
@@ -12,19 +13,21 @@ public class Piece : GameUnit
     public int pictureId;
     public Vector2Int localCell;
 
-    Coroutine flipRoutine;
+    Sequence flipSequence;
     Sprite backSprite;
     Vector3 defaultPieceScale = Vector3.one;
 
+    public Collider2D _col;
+
     public override void OnInit()
     {
-
     }
 
     public override void OnDespawn()
     {
-
+        KillFlip();
     }
+
     private void Awake()
     {
         defaultPieceScale = transform.localScale;
@@ -43,20 +46,19 @@ public class Piece : GameUnit
         this.localCell = localCell;
         SetPosInBoard(x, y);
 
-        if (flipRoutine != null)
-        {
-            StopCoroutine(flipRoutine);
-        }
+        KillFlip();
 
         if (playFlip)
         {
-            flipRoutine = StartCoroutine(FlipReveal(sprite, delay));
+            FlipReveal(sprite, delay);
         }
         else
         {
+            transform.localScale = defaultPieceScale;
             SetSprite(sprite);
         }
     }
+
     public void SetPosInBoard(int x, int y)
     {
         posInBoard = new Vector2Int(x, y);
@@ -74,40 +76,37 @@ public class Piece : GameUnit
         targetSprite.sprite = sprite;
     }
 
-    IEnumerator FlipReveal(Sprite sprite, float delay)
+    void FlipReveal(Sprite sprite, float delay)
     {
+        KillFlip();
+        _col.enabled = false;
         transform.localScale = defaultPieceScale;
         SetSprite(backSprite);
 
-        if (delay > 0f)
-        {
-            yield return new WaitForSeconds(delay);
-        }
-
         float halfDuration = flipDuration * 0.5f;
-        float elapsed = 0f;
+        Vector3 closedScale = new Vector3(defaultPieceScale.x, 0f, defaultPieceScale.z);
 
-        while (elapsed < halfDuration)
+        flipSequence = DOTween.Sequence();
+        flipSequence.SetDelay(delay);
+        flipSequence.Append(transform.DOScale(closedScale, halfDuration).SetEase(Ease.InQuad));
+        flipSequence.AppendCallback(() => SetSprite(sprite));
+        flipSequence.Append(transform.DOScale(defaultPieceScale, halfDuration).SetEase(Ease.OutQuad));
+        flipSequence.OnKill(() => flipSequence = null);
+        flipSequence.OnComplete(() =>
         {
-            elapsed += Time.deltaTime;
-            float t = Mathf.Clamp01(elapsed / halfDuration);
-            transform.localScale = new Vector3(Mathf.Lerp(defaultPieceScale.x, 0f, t), defaultPieceScale.y, defaultPieceScale.z);
-            yield return null;
-        }
+            transform.localScale = defaultPieceScale;
+            flipSequence = null;
+            _col.enabled = true;
+        });
+    }
 
-        SetSprite(sprite);
-
-        elapsed = 0f;
-        while (elapsed < halfDuration)
+    void KillFlip()
+    {
+        if (flipSequence != null)
         {
-            elapsed += Time.deltaTime;
-            float t = Mathf.Clamp01(elapsed / halfDuration);
-            transform.localScale = new Vector3(Mathf.Lerp(0f, defaultPieceScale.x, t), defaultPieceScale.y, defaultPieceScale.z);
-            yield return null;
+            flipSequence.Kill();
+            flipSequence = null;
         }
-
-        transform.localScale = defaultPieceScale;
-        flipRoutine = null;
     }
 
     SpriteRenderer GetTargetSprite()
@@ -115,6 +114,22 @@ public class Piece : GameUnit
         return pieceSprite != null ? pieceSprite : spriteRenderer;
     }
 
-    //Drag and Drop
+    public void OnPointerDown(PointerEventData eventData)
+    {
+        Debug.Log("Pointer Down");
+    }
 
+    public void OnBeginDrag(PointerEventData eventData)
+    {
+        Debug.Log("Begin Drag");
+    }
+
+    public void OnDrag(PointerEventData eventData)
+    {
+    }
+
+    public void OnEndDrag(PointerEventData eventData)
+    {
+        Debug.Log("End Drag");
+    }
 }

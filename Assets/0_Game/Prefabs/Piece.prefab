@@ -197,6 +197,7 @@ MonoBehaviour:
   pictureSO: {fileID: 0}
   pictureId: 0
   localCell: {x: 0, y: 0}
+  _col: {fileID: 0}
 --- !u!61 &4004789166002386284
 BoxCollider2D:
   m_ObjectHideFlags: 0
@@ -389,6 +390,7 @@ MonoBehaviour:
   pictureSO: {fileID: 0}
   pictureId: 0
   localCell: {x: 0, y: 0}
+  _col: {fileID: 1456612210463442086}
 --- !u!61 &1456612210463442086
 BoxCollider2D:
   m_ObjectHideFlags: 0
