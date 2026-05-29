@@ -16,6 +16,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     const float CompleteClearDuration = 0.5f;
 
     public Piece[,] pieces;
+    Queue<SpawnPieceData>[] columnDecks;
     readonly List<PieceGroup> activeGroups = new List<PieceGroup>();
     Transform boardParent;
     Tween rebuildTween;
@@ -59,6 +60,8 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             Shuffle(spawnPieces);
         }
 
+        SortSpawnPiecesByPictureSize(spawnPieces);
+
         Vector2 pieceSize = GetPieceSize(piecePrb);
         Vector2 boardOffset = new Vector2(
             (width - 1) * pieceSize.x * 0.5f,
@@ -66,6 +69,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         );
 
         int spawnCount = GetSpawnCount(spawnPieces.Count);
+        BuildColumnDecks(spawnPieces, spawnCount);
         int spawnIndex = 0;
 
         for (int y = 0; y < height; y++)
@@ -106,8 +110,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     int GetSpawnCount(int availablePieceCount)
     {
         int boardCapacity = width * height;
-        int requestedCount = curLevel.initialPieceCount > 0 ? curLevel.initialPieceCount : boardCapacity;
-        return Mathf.Min(requestedCount, boardCapacity, availablePieceCount);
+        return Mathf.Min(boardCapacity, availablePieceCount);
     }
 
     List<SpawnPieceData> BuildSpawnPieces()
@@ -143,6 +146,21 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         return spawnPieces;
     }
 
+    void BuildColumnDecks(List<SpawnPieceData> spawnPieces, int startIndex)
+    {
+        columnDecks = new Queue<SpawnPieceData>[width];
+        for (int x = 0; x < width; x++)
+        {
+            columnDecks[x] = new Queue<SpawnPieceData>();
+        }
+
+        for (int i = startIndex; i < spawnPieces.Count; i++)
+        {
+            int column = (i - startIndex) % width;
+            columnDecks[column].Enqueue(spawnPieces[i]);
+        }
+    }
+
     void Shuffle<T>(List<T> list)
     {
         for (int i = list.Count - 1; i > 0; i--)
@@ -152,6 +170,27 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             list[i] = list[randomIndex];
             list[randomIndex] = temp;
         }
+    }
+
+    void SortSpawnPiecesByPictureSize(List<SpawnPieceData> spawnPieces)
+    {
+        spawnPieces.Sort((a, b) =>
+        {
+            int aCount = GetPicturePieceCount(a.pictureSO);
+            int bCount = GetPicturePieceCount(b.pictureSO);
+            return aCount.CompareTo(bCount);
+        });
+    }
+
+    int GetPicturePieceCount(PictureSO picture)
+    {
+        if (picture == null)
+        {
+            return int.MaxValue;
+        }
+
+        int sizeCount = picture.size.x * picture.size.y;
+        return sizeCount > 0 ? sizeCount : picture.pieces.Count;
     }
 
     public Piece GetNearestPiece(Vector3 position, Piece ignorePiece)
@@ -696,6 +735,43 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
                 writeY++;
             }
+
+            FillColumnFromDeck(x, writeY);
+        }
+    }
+
+    void FillColumnFromDeck(int x, int startY)
+    {
+        if (columnDecks == null || x < 0 || x >= columnDecks.Length || columnDecks[x] == null)
+        {
+            return;
+        }
+
+        int spawnOrder = 0;
+        for (int y = startY; y < height; y++)
+        {
+            if (columnDecks[x].Count == 0)
+            {
+                break;
+            }
+
+            SpawnPieceData data = columnDecks[x].Dequeue();
+            Piece piece = SimplePool.Spawn<Piece>(piecePrb);
+            if (boardParent != null)
+            {
+                piece.transform.SetParent(boardParent, false);
+            }
+
+            Vector3 targetPosition = GetBoardWorldPosition(x, y);
+            Vector3 spawnPosition = GetBoardWorldPosition(x, height + spawnOrder);
+            piece.transform.position = spawnPosition;
+            piece.transform.localScale = Vector3.one;
+
+            piece.Setup(data.pictureSO, data.localCell, data.sprite, x, y, false, 0f);
+            piece.SetSnapPositionOnly(targetPosition);
+            pieces[x, y] = piece;
+            piece.MoveToSnapPosition();
+            spawnOrder++;
         }
     }
 
@@ -812,26 +888,15 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     bool ShouldScaleNewGroup(List<Piece> groupPieces, List<HashSet<string>> oldGroupSets)
     {
         HashSet<string> newSet = BuildGroupIdSet(groupPieces);
-        int bestOldOverlap = 0;
-
         for (int i = 0; i < oldGroupSets.Count; i++)
         {
-            int overlap = 0;
-            foreach (string id in newSet)
+            if (newSet.SetEquals(oldGroupSets[i]))
             {
-                if (oldGroupSets[i].Contains(id))
-                {
-                    overlap++;
-                }
-            }
-
-            if (overlap > bestOldOverlap)
-            {
-                bestOldOverlap = overlap;
+                return false;
             }
         }
 
-        return newSet.Count > bestOldOverlap;
+        return true;
     }
 
     void PlayGroupMergeScale(PieceGroup group)
