@@ -13,11 +13,13 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     public bool playSpawnFlip = true;
     public float flipDelayEachPiece = 0.02f;
     const float PieceMoveDuration = 0.17f;
+    const float CompleteClearDuration = 0.2f;
 
     public Piece[,] pieces;
     readonly List<PieceGroup> activeGroups = new List<PieceGroup>();
     Transform boardParent;
     Tween rebuildTween;
+    bool isResolvingComplete;
 
     public bool IsInputLocked { get; private set; }
 
@@ -189,6 +191,74 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         return nearestPiece;
     }
 
+    public bool GetNearestCell(Vector3 position, Piece ignorePiece, PieceGroup ignoreGroup, out Vector2Int nearestCell)
+    {
+        nearestCell = Vector2Int.zero;
+        if (pieces == null)
+        {
+            return false;
+        }
+
+        bool foundCell = false;
+        float nearestDistance = GetPieceSize(piecePrb).magnitude * 0.5f;
+
+        for (int x = 0; x < pieces.GetLength(0); x++)
+        {
+            for (int y = 0; y < pieces.GetLength(1); y++)
+            {
+                Piece piece = pieces[x, y];
+                if (piece == ignorePiece || (ignoreGroup != null && piece != null && ignoreGroup.Contains(piece)))
+                {
+                    continue;
+                }
+
+                float distance = Vector3.Distance(position, GetBoardWorldPosition(x, y));
+                if (distance <= nearestDistance)
+                {
+                    nearestDistance = distance;
+                    nearestCell = new Vector2Int(x, y);
+                    foundCell = true;
+                }
+            }
+        }
+
+        return foundCell;
+    }
+
+    public void MovePieceToCell(Piece piece, Vector2Int targetCell)
+    {
+        if (IsInputLocked || piece == null || !IsInBoard(targetCell))
+        {
+            return;
+        }
+
+        Vector2Int oldCell = piece.posInBoard;
+        if (oldCell == targetCell)
+        {
+            LockInputForMove();
+            piece.MoveToSnapPosition();
+            return;
+        }
+
+        Piece targetPiece = pieces[targetCell.x, targetCell.y];
+        if (targetPiece != null)
+        {
+            SwapPieces(piece, targetPiece);
+            return;
+        }
+
+        IsInputLocked = true;
+        pieces[oldCell.x, oldCell.y] = null;
+        pieces[targetCell.x, targetCell.y] = piece;
+
+        piece.SetPosInBoard(targetCell.x, targetCell.y);
+        piece.SetSnapPositionOnly(GetBoardWorldPosition(targetCell.x, targetCell.y));
+        piece.MoveToSnapPosition();
+        ApplyGravity();
+
+        RebuildGroupsAfterMove();
+    }
+
     public void SwapPieces(Piece firstPiece, Piece secondPiece)
     {
         if (IsInputLocked)
@@ -221,27 +291,41 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     public void SwapGroup(PieceGroup group, Piece grabbedPiece, Piece targetPiece)
     {
-        if (IsInputLocked)
-        {
-            return;
-        }
-
-        if (group == null || grabbedPiece == null || targetPiece == null || group.Contains(targetPiece))
+        if (targetPiece == null)
         {
             MoveGroupBack(group);
             return;
         }
 
-        IsInputLocked = true;
+        MoveGroupToCell(group, grabbedPiece, targetPiece.posInBoard);
+    }
 
-        Vector2Int offset = targetPiece.posInBoard - grabbedPiece.posInBoard;
+    public void MoveGroupToCell(PieceGroup group, Piece grabbedPiece, Vector2Int targetCell)
+    {
+        if (IsInputLocked)
+        {
+            return;
+        }
+
+        if (group == null || grabbedPiece == null || !IsInBoard(targetCell))
+        {
+            MoveGroupBack(group);
+            return;
+        }
+
+        Vector2Int offset = targetCell - grabbedPiece.posInBoard;
+        if (offset == Vector2Int.zero)
+        {
+            MoveGroupBack(group);
+            return;
+        }
+
         List<Piece> groupPieces = new List<Piece>(group.pieces);
         List<Vector2Int> oldCells = new List<Vector2Int>(groupPieces.Count);
         List<Vector2Int> newCells = new List<Vector2Int>(groupPieces.Count);
-        List<Vector3> oldSnaps = new List<Vector3>(groupPieces.Count);
-        List<Vector3> newSnaps = new List<Vector3>(groupPieces.Count);
         List<Piece> swapPieces = new List<Piece>();
         List<Vector2Int> swapToCells = new List<Vector2Int>();
+        bool hasEmptyTargetCell = false;
 
         for (int i = 0; i < groupPieces.Count; i++)
         {
@@ -262,8 +346,6 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
             oldCells.Add(oldCell);
             newCells.Add(newCell);
-            oldSnaps.Add(piece.GetSnapPosition());
-            newSnaps.Add(GetSnapPositionBeforeSwap(newCell, oldCells, oldSnaps));
         }
 
         for (int i = 0; i < newCells.Count; i++)
@@ -271,11 +353,9 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             Piece swapPiece = pieces[newCells[i].x, newCells[i].y];
             if (swapPiece == null)
             {
-                MoveGroupBack(group);
-                return;
+                hasEmptyTargetCell = true;
             }
-
-            if (!group.Contains(swapPiece))
+            else if (!group.Contains(swapPiece))
             {
                 swapPieces.Add(swapPiece);
             }
@@ -289,10 +369,17 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             }
         }
 
-        if (swapPieces.Count != swapToCells.Count)
+        if (swapPieces.Count > swapToCells.Count)
         {
             MoveGroupBack(group);
             return;
+        }
+
+        IsInputLocked = true;
+
+        for (int i = 0; i < oldCells.Count; i++)
+        {
+            pieces[oldCells[i].x, oldCells[i].y] = null;
         }
 
         for (int i = 0; i < groupPieces.Count; i++)
@@ -302,7 +389,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
             pieces[newCell.x, newCell.y] = groupPiece;
             groupPiece.SetPosInBoard(newCell.x, newCell.y);
-            groupPiece.SetSnapPositionOnly(newSnaps[i]);
+            groupPiece.SetSnapPositionOnly(GetBoardWorldPosition(newCell.x, newCell.y));
         }
 
         for (int i = 0; i < swapPieces.Count; i++)
@@ -312,7 +399,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
             pieces[swapToCell.x, swapToCell.y] = swapPiece;
             swapPiece.SetPosInBoard(swapToCell.x, swapToCell.y);
-            swapPiece.SetSnapPositionOnly(GetSnapPositionBeforeSwap(swapToCell, oldCells, oldSnaps));
+            swapPiece.SetSnapPositionOnly(GetBoardWorldPosition(swapToCell.x, swapToCell.y));
         }
 
         for (int i = 0; i < groupPieces.Count; i++)
@@ -323,6 +410,11 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         for (int i = 0; i < swapPieces.Count; i++)
         {
             swapPieces[i].MoveToSnapPosition();
+        }
+
+        if (hasEmptyTargetCell)
+        {
+            ApplyGravity();
         }
 
         RebuildGroupsAfterMove();
@@ -389,6 +481,8 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
                 }
             }
         }
+
+        CheckCompletedGroups();
     }
 
     void RebuildGroupsAfterMove()
@@ -401,7 +495,10 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         rebuildTween = DOVirtual.DelayedCall(PieceMoveDuration, () =>
         {
             RebuildGroups();
-            IsInputLocked = false;
+            if (!isResolvingComplete)
+            {
+                IsInputLocked = false;
+            }
             rebuildTween = null;
         });
     }
@@ -456,6 +553,150 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         }
 
         activeGroups.Clear();
+    }
+
+    void CheckCompletedGroups()
+    {
+        List<PieceGroup> completedGroups = new List<PieceGroup>();
+
+        for (int i = 0; i < activeGroups.Count; i++)
+        {
+            PieceGroup group = activeGroups[i];
+            if (group != null && IsCompletedGroup(group))
+            {
+                completedGroups.Add(group);
+            }
+        }
+
+        if (completedGroups.Count == 0)
+        {
+            return;
+        }
+
+        isResolvingComplete = true;
+        IsInputLocked = true;
+
+        for (int i = 0; i < completedGroups.Count; i++)
+        {
+            PieceGroup group = completedGroups[i];
+            group.transform.DOKill();
+            group.transform.DOScale(Vector3.zero, CompleteClearDuration).SetEase(Ease.InBack);
+        }
+
+        DOVirtual.DelayedCall(CompleteClearDuration, () =>
+        {
+            ClearCompletedGroups(completedGroups);
+            ApplyGravity();
+            RebuildGroupsAfterMove();
+            isResolvingComplete = false;
+        });
+    }
+
+    bool IsCompletedGroup(PieceGroup group)
+    {
+        if (group == null || group.pieces.Count == 0)
+        {
+            return false;
+        }
+
+        PictureSO picture = group.pieces[0] != null ? group.pieces[0].pictureSO : null;
+        if (picture == null)
+        {
+            return false;
+        }
+
+        int requiredCount = picture.size.x * picture.size.y;
+        if (requiredCount <= 0 || group.pieces.Count != requiredCount)
+        {
+            return false;
+        }
+
+        HashSet<Vector2Int> localCells = new HashSet<Vector2Int>();
+        for (int i = 0; i < group.pieces.Count; i++)
+        {
+            Piece piece = group.pieces[i];
+            if (piece == null || piece.pictureSO != picture)
+            {
+                return false;
+            }
+
+            if (piece.localCell.x < 0 || piece.localCell.x >= picture.size.x
+                || piece.localCell.y < 0 || piece.localCell.y >= picture.size.y)
+            {
+                return false;
+            }
+
+            localCells.Add(piece.localCell);
+        }
+
+        return localCells.Count == requiredCount;
+    }
+
+    void ClearCompletedGroups(List<PieceGroup> completedGroups)
+    {
+        Transform parent = boardParent != null ? boardParent : transform;
+
+        for (int i = 0; i < completedGroups.Count; i++)
+        {
+            PieceGroup group = completedGroups[i];
+            if (group == null)
+            {
+                continue;
+            }
+
+            for (int j = 0; j < group.pieces.Count; j++)
+            {
+                Piece piece = group.pieces[j];
+                if (piece == null)
+                {
+                    continue;
+                }
+
+                Vector2Int cell = piece.posInBoard;
+                if (IsInBoard(cell) && pieces[cell.x, cell.y] == piece)
+                {
+                    pieces[cell.x, cell.y] = null;
+                }
+
+                piece.transform.SetParent(parent, true);
+                piece.transform.localScale = Vector3.one;
+                SimplePool.Despawn(piece);
+            }
+
+            activeGroups.Remove(group);
+            SimplePool.Despawn(group);
+        }
+    }
+
+    void ApplyGravity()
+    {
+        ClearGroups();
+
+        for (int x = 0; x < width; x++)
+        {
+            int writeY = 0;
+
+            for (int readY = 0; readY < height; readY++)
+            {
+                Piece piece = pieces[x, readY];
+                if (piece == null)
+                {
+                    continue;
+                }
+
+                if (readY != writeY)
+                {
+                    pieces[x, writeY] = piece;
+                    pieces[x, readY] = null;
+
+                    piece.SetPosInBoard(x, writeY);
+                    piece.SetSnapPositionOnly(GetBoardWorldPosition(x, writeY));
+                    piece.MoveToSnapPosition();
+                }
+
+                writeY++;
+            }
+        }
     }
 
     List<Piece> BuildGroup(Piece startPiece, HashSet<Piece> visited)
@@ -571,15 +812,26 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     bool ShouldScaleNewGroup(List<Piece> groupPieces, List<HashSet<string>> oldGroupSets)
     {
         HashSet<string> newSet = BuildGroupIdSet(groupPieces);
+        int bestOldOverlap = 0;
+
         for (int i = 0; i < oldGroupSets.Count; i++)
         {
-            if (newSet.IsSubsetOf(oldGroupSets[i]))
+            int overlap = 0;
+            foreach (string id in newSet)
             {
-                return false;
+                if (oldGroupSets[i].Contains(id))
+                {
+                    overlap++;
+                }
+            }
+
+            if (overlap > bestOldOverlap)
+            {
+                bestOldOverlap = overlap;
             }
         }
 
-        return true;
+        return newSet.Count > bestOldOverlap;
     }
 
     void PlayGroupMergeScale(PieceGroup group)
@@ -633,6 +885,23 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             spriteSize.x * scale.x,
             spriteSize.y * scale.y
         );
+    }
+
+    Vector3 GetBoardWorldPosition(int x, int y)
+    {
+        Vector2 pieceSize = GetPieceSize(piecePrb);
+        Vector2 boardOffset = new Vector2(
+            (width - 1) * pieceSize.x * 0.5f,
+            (height - 1) * pieceSize.y * 0.5f
+        );
+
+        Vector3 localPosition = new Vector3(
+            x * pieceSize.x - boardOffset.x,
+            y * pieceSize.y - boardOffset.y,
+            0
+        );
+
+        return boardParent != null ? boardParent.TransformPoint(localPosition) : localPosition;
     }
     
     //Drag drop

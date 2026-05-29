@@ -219,16 +219,16 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
             ResetOrder();
         }
 
-        Piece targetPiece = IngameManager.ins != null ? IngameManager.ins.GetNearestPiece(transform.position, this, dragGroup) : null;
-        if (targetPiece != null)
+        Vector2Int targetCell;
+        if (IngameManager.ins != null && IngameManager.ins.GetNearestCell(transform.position, this, dragGroup, out targetCell))
         {
             if (dragGroup != null)
             {
-                IngameManager.ins.SwapGroup(dragGroup, this, targetPiece);
+                IngameManager.ins.MoveGroupToCell(dragGroup, this, targetCell);
             }
             else
             {
-                IngameManager.ins.SwapPieces(this, targetPiece);
+                IngameManager.ins.MovePieceToCell(this, targetCell);
             }
 
             dragTransform = null;
