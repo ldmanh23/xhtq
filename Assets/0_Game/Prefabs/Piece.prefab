@@ -98,7 +98,6 @@ GameObject:
   - component: {fileID: 2208201828230636389}
   - component: {fileID: 6746992679314786704}
   - component: {fileID: 8535871195024556288}
-  - component: {fileID: 4004789166002386284}
   m_Layer: 0
   m_Name: PieceSprite
   m_TagString: Untagged
@@ -197,53 +196,8 @@ MonoBehaviour:
   pictureSO: {fileID: 0}
   pictureId: 0
   localCell: {x: 0, y: 0}
+  borders: []
   _col: {fileID: 0}
---- !u!61 &4004789166002386284
-BoxCollider2D:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1645761576948199307}
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Density: 1
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_ForceSendLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_ForceReceiveLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_ContactCaptureLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_CallbackLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_IsTrigger: 0
-  m_UsedByEffector: 0
-  m_CompositeOperation: 0
-  m_CompositeOrder: 0
-  m_Offset: {x: 0, y: 0}
-  m_SpriteTilingProperty:
-    border: {x: 0, y: 0, z: 0, w: 0}
-    pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 1, y: 1}
-    newSize: {x: 1, y: 1}
-    adaptiveTilingThreshold: 0.5
-    drawMode: 0
-    adaptiveTiling: 0
-  m_AutoTiling: 0
-  m_Size: {x: 1, y: 1}
-  m_EdgeRadius: 0
 --- !u!1 &1913360785674135109
 GameObject:
   m_ObjectHideFlags: 0
@@ -390,6 +344,11 @@ MonoBehaviour:
   pictureSO: {fileID: 0}
   pictureId: 0
   localCell: {x: 0, y: 0}
+  borders:
+  - {fileID: 7798558423360057927}
+  - {fileID: 7866871202341848455}
+  - {fileID: 6540318893185276547}
+  - {fileID: 4665337386818485054}
   _col: {fileID: 1456612210463442086}
 --- !u!61 &1456612210463442086
 BoxCollider2D:

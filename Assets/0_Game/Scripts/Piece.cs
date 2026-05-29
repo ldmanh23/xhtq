@@ -16,6 +16,11 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
     Sequence flipSequence;
     Sprite backSprite;
     Vector3 defaultPieceScale = Vector3.one;
+    Vector3 dragOffset;
+    float dragZ;
+    int defOrder;
+
+    public SpriteRenderer[] borders;
 
     public Collider2D _col;
 
@@ -37,6 +42,8 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
         {
             backSprite = targetSprite.sprite;
         }
+
+        defOrder = spriteRenderer.sortingOrder;
     }
 
     public void Setup(PictureSO pictureSO, Vector2Int localCell, Sprite sprite, int x, int y, bool playFlip, float delay)
@@ -116,20 +123,41 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
 
     public void OnPointerDown(PointerEventData eventData)
     {
-        Debug.Log("Pointer Down");
+        spriteRenderer.sortingOrder += 10;
+        for (int i = 0; i < borders.Length; i++)
+        {
+            borders[i].sortingOrder = spriteRenderer.sortingOrder + 1;
+        }
+        Debug.Log("OnPointerDown: " + posInBoard);
     }
 
     public void OnBeginDrag(PointerEventData eventData)
     {
-        Debug.Log("Begin Drag");
+        dragZ = transform.position.z;
+        dragOffset = transform.position - GetPointerWorldPosition(eventData);
     }
 
     public void OnDrag(PointerEventData eventData)
     {
+        Vector3 targetPosition = GetPointerWorldPosition(eventData) + dragOffset;
+        targetPosition.z = dragZ;
+        transform.position = targetPosition;
     }
 
     public void OnEndDrag(PointerEventData eventData)
     {
-        Debug.Log("End Drag");
+    }
+
+    Vector3 GetPointerWorldPosition(PointerEventData eventData)
+    {
+        Camera cam = eventData.pressEventCamera != null ? eventData.pressEventCamera : Camera.main;
+        if (cam == null)
+        {
+            return transform.position;
+        }
+
+        Vector3 screenPosition = eventData.position;
+        screenPosition.z = Mathf.Abs(cam.transform.position.z - dragZ);
+        return cam.ScreenToWorldPoint(screenPosition);
     }
 }
