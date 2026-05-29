@@ -17,6 +17,7 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
     Sprite backSprite;
     Vector3 defaultPieceScale = Vector3.one;
     Vector3 dragOffset;
+    Vector3 snapPosition;
     float dragZ;
     int defOrder;
 
@@ -69,6 +70,33 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
     public void SetPosInBoard(int x, int y)
     {
         posInBoard = new Vector2Int(x, y);
+    }
+
+    public void SetSnapPosition(Vector3 position)
+    {
+        snapPosition = position;
+        transform.position = position;
+    }
+
+    public void SetSnapPositionOnly(Vector3 position)
+    {
+        snapPosition = position;
+    }
+
+    public Vector3 GetSnapPosition()
+    {
+        return snapPosition;
+    }
+
+    public void MoveToSnapPosition()
+    {
+        spriteRenderer.sortingOrder += 7;
+        for (int i = 0; i < borders.Length; i++)
+        {
+            borders[i].sortingOrder = spriteRenderer.sortingOrder + 1;
+        }
+        transform.DOMove(snapPosition, 0.15f).SetEase(Ease.OutQuad)
+            .OnComplete(() => ResetOrder());
     }
 
     void SetSprite(Sprite sprite)
@@ -146,6 +174,16 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
 
     public void OnEndDrag(PointerEventData eventData)
     {
+        ResetOrder();
+
+        Piece targetPiece = IngameManager.ins != null ? IngameManager.ins.GetNearestPiece(transform.position, this) : null;
+        if (targetPiece != null)
+        {
+            IngameManager.ins.SwapPieces(this, targetPiece);
+            return;
+        }
+
+        MoveToSnapPosition();
     }
 
     Vector3 GetPointerWorldPosition(PointerEventData eventData)
@@ -159,5 +197,14 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
         Vector3 screenPosition = eventData.position;
         screenPosition.z = Mathf.Abs(cam.transform.position.z - dragZ);
         return cam.ScreenToWorldPoint(screenPosition);
+    }
+
+    void ResetOrder()
+    {
+        spriteRenderer.sortingOrder = defOrder;
+        for (int i = 0; i < borders.Length; i++)
+        {
+            borders[i].sortingOrder = spriteRenderer.sortingOrder + 1;
+        }
     }
 }

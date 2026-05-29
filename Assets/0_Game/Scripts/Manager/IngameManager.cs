@@ -78,6 +78,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
                 SpawnPieceData data = spawnPieces[spawnIndex];
                 float delay = spawnIndex * flipDelayEachPiece;
                 piece.Setup(data.pictureSO, data.localCell, data.sprite, x, y, playSpawnFlip, delay);
+                piece.SetSnapPosition(piece.transform.position);
 
                 pieces[x, y] = piece;
                 spawnIndex++;
@@ -134,6 +135,59 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             list[i] = list[randomIndex];
             list[randomIndex] = temp;
         }
+    }
+
+    public Piece GetNearestPiece(Vector3 position, Piece ignorePiece)
+    {
+        if (pieces == null)
+        {
+            return null;
+        }
+
+        Piece nearestPiece = null;
+        float nearestDistance = GetPieceSize(piecePrb).magnitude * 0.5f;
+
+        for (int x = 0; x < pieces.GetLength(0); x++)
+        {
+            for (int y = 0; y < pieces.GetLength(1); y++)
+            {
+                Piece piece = pieces[x, y];
+                if (piece == null || piece == ignorePiece)
+                {
+                    continue;
+                }
+
+                float distance = Vector3.Distance(position, piece.GetSnapPosition());
+                if (distance <= nearestDistance)
+                {
+                    nearestDistance = distance;
+                    nearestPiece = piece;
+                }
+            }
+        }
+
+        return nearestPiece;
+    }
+
+    public void SwapPieces(Piece firstPiece, Piece secondPiece)
+    {
+        Vector2Int firstCell = firstPiece.posInBoard;
+        Vector2Int secondCell = secondPiece.posInBoard;
+
+        pieces[firstCell.x, firstCell.y] = secondPiece;
+        pieces[secondCell.x, secondCell.y] = firstPiece;
+
+        Vector3 firstSnap = firstPiece.GetSnapPosition();
+        Vector3 secondSnap = secondPiece.GetSnapPosition();
+
+        firstPiece.SetPosInBoard(secondCell.x, secondCell.y);
+        secondPiece.SetPosInBoard(firstCell.x, firstCell.y);
+
+        firstPiece.SetSnapPositionOnly(secondSnap);
+        secondPiece.SetSnapPositionOnly(firstSnap);
+
+        firstPiece.MoveToSnapPosition();
+        secondPiece.MoveToSnapPosition();
     }
 
     Vector2 GetPieceSize(Piece piece)
