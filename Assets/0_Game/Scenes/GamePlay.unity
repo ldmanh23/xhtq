@@ -274,7 +274,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   isDontDestroy: 0
-  curLevel: {fileID: 11400000, guid: fb2f04ce5e4a09647bec181b49ad3fb6, type: 2}
+  curLevel: {fileID: 11400000, guid: bbc3c92c7483d184785f30513b6fe6fd, type: 2}
   piecePrb: {fileID: 6254871813729163923, guid: ca706da825281f6418bcbfd5dd222169, type: 3}
   pieceGroupPrb: {fileID: 4057060536262045973, guid: 5b154f90217431a4a889d263067388f0, type: 3}
   height: 6

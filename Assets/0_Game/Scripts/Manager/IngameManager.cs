@@ -563,6 +563,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
         List<HashSet<string>> oldGroupSets = GetActiveGroupStateSets();
         ClearGroups();
+        ResetAllPieceBorders();
 
         HashSet<Piece> visited = new HashSet<Piece>();
 
@@ -916,6 +917,62 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         {
             PlayGroupMergeScaleWhenStable(group);
         }
+
+        HideInnerBorders(groupPieces);
+    }
+
+    void ResetAllPieceBorders()
+    {
+        if (pieces == null)
+        {
+            return;
+        }
+
+        for (int x = 0; x < pieces.GetLength(0); x++)
+        {
+            for (int y = 0; y < pieces.GetLength(1); y++)
+            {
+                if (pieces[x, y] != null)
+                {
+                    pieces[x, y].ResetBorders();
+                }
+            }
+        }
+    }
+
+    void HideInnerBorders(List<Piece> groupPieces)
+    {
+        for (int i = 0; i < groupPieces.Count; i++)
+        {
+            Piece piece = groupPieces[i];
+            if (piece == null)
+            {
+                continue;
+            }
+
+            HideBorderIfGrouped(piece, Vector2Int.up);
+            HideBorderIfGrouped(piece, Vector2Int.right);
+            HideBorderIfGrouped(piece, Vector2Int.down);
+            HideBorderIfGrouped(piece, Vector2Int.left);
+        }
+    }
+
+    void HideBorderIfGrouped(Piece piece, Vector2Int direction)
+    {
+        Vector2Int neighborCell = piece.posInBoard + direction;
+        if (!IsInBoard(neighborCell))
+        {
+            return;
+        }
+
+        Piece neighbor = pieces[neighborCell.x, neighborCell.y];
+        if (neighbor == null || !CanGroup(piece, neighbor))
+        {
+            return;
+        }
+
+        piece.SetBorderVisible(direction, false);
+        neighbor.SetBorderVisible(-direction, false);
     }
 
     List<HashSet<string>> GetActiveGroupStateSets()

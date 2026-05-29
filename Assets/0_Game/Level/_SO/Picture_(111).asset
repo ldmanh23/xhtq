@@ -15,7 +15,7 @@ MonoBehaviour:
   pictureId: 0
   pictureName: (111)
   size: {x: 4, y: 1}
-  fullSprite: {fileID: 21300000, guid: dec5e505539815c4f9e1315d818aa2a2, type: 3}
+  fullSprite: {fileID: 21300000, guid: 699e88dff57c5604286b4f068a82cd52, type: 3}
   pieces:
   - localCell: {x: 0, y: 0}
     sprite: {fileID: 21300000, guid: 1eca89ee5f8a8fc49a43d3a3284a9b55, type: 3}

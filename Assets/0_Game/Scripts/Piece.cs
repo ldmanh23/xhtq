@@ -7,6 +7,7 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
     public SpriteRenderer pieceSprite;
     public SpriteRenderer spriteRenderer;
     public float flipDuration = 0.18f;
+    public float pictureOverlapScale = 1.01f;
 
     public Vector2Int posInBoard;
     public PictureSO pictureSO;
@@ -16,6 +17,7 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
     Sequence flipSequence;
     Sprite backSprite;
     Vector3 defaultPieceScale = Vector3.one;
+    Vector3 defaultPictureScale = Vector3.one;
     Vector3 dragOffset;
     Vector3 snapPosition;
     float dragZ;
@@ -47,6 +49,11 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
             backSprite = targetSprite.sprite;
         }
 
+        if (pieceSprite != null)
+        {
+            defaultPictureScale = pieceSprite.transform.localScale;
+        }
+
         defOrder = spriteRenderer.sortingOrder;
     }
 
@@ -56,8 +63,10 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
         pictureId = pictureSO != null ? pictureSO.pictureId : 0;
         this.localCell = localCell;
         SetPosInBoard(x, y);
+        ResetBorders();
 
         KillFlip();
+        ApplyPictureOverlap();
 
         if (playFlip)
         {
@@ -95,10 +104,7 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
     {
         transform.DOKill();
         spriteRenderer.sortingOrder += 7;
-        for (int i = 0; i < borders.Length; i++)
-        {
-            borders[i].sortingOrder = spriteRenderer.sortingOrder + 1;
-        }
+        SetBorderOrder(spriteRenderer.sortingOrder + 1);
         transform.DOMove(snapPosition, 0.15f).SetEase(Ease.OutQuad)
             .OnComplete(() => ResetOrder());
     }
@@ -113,6 +119,15 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
         }
 
         targetSprite.sprite = sprite;
+        ApplyPictureOverlap();
+    }
+
+    void ApplyPictureOverlap()
+    {
+        if (pieceSprite != null)
+        {
+            pieceSprite.transform.localScale = defaultPictureScale * pictureOverlapScale;
+        }
     }
 
     void FlipReveal(Sprite sprite, float delay)
@@ -257,19 +272,85 @@ public class Piece : GameUnit, IPointerDownHandler, IBeginDragHandler, IEndDragH
     void ResetOrder()
     {
         spriteRenderer.sortingOrder = defOrder;
-        for (int i = 0; i < borders.Length; i++)
-        {
-            borders[i].sortingOrder = spriteRenderer.sortingOrder + 1;
-        }
+        SetBorderOrder(spriteRenderer.sortingOrder + 1);
     }
 
     void SetOrderOffset(int offset)
     {
         spriteRenderer.sortingOrder = defOrder + offset;
+        SetBorderOrder(spriteRenderer.sortingOrder + 1);
+    }
+
+    void SetBorderOrder(int sortingOrder)
+    {
+        if (borders == null)
+        {
+            return;
+        }
+
         for (int i = 0; i < borders.Length; i++)
         {
-            borders[i].sortingOrder = spriteRenderer.sortingOrder + 1;
+            if (borders[i] != null)
+            {
+                borders[i].sortingOrder = sortingOrder;
+            }
         }
+    }
+
+    public void ResetBorders()
+    {
+        SetBorderVisible(Vector2Int.up, true);
+        SetBorderVisible(Vector2Int.right, true);
+        SetBorderVisible(Vector2Int.down, true);
+        SetBorderVisible(Vector2Int.left, true);
+    }
+
+    public void SetBorderVisible(Vector2Int direction, bool visible)
+    {
+        SpriteRenderer border = GetBorder(direction);
+        if (border != null)
+        {
+            border.gameObject.SetActive(visible);
+        }
+    }
+
+    SpriteRenderer GetBorder(Vector2Int direction)
+    {
+        if (borders == null)
+        {
+            return null;
+        }
+
+        string borderName = GetBorderName(direction);
+        for (int i = 0; i < borders.Length; i++)
+        {
+            if (borders[i] != null && borders[i].name.ToLower() == borderName)
+            {
+                return borders[i];
+            }
+        }
+
+        return null;
+    }
+
+    string GetBorderName(Vector2Int direction)
+    {
+        if (direction == Vector2Int.up)
+        {
+            return "top";
+        }
+
+        if (direction == Vector2Int.right)
+        {
+            return "right";
+        }
+
+        if (direction == Vector2Int.down)
+        {
+            return "bot";
+        }
+
+        return "left";
     }
 
     void SetGroupOrderOffset(PieceGroup group, int offset)
