@@ -328,7 +328,8 @@ public enum IngameType
 
 public enum PoolType
 {
-    normalPiece
+    normalPiece,
+    groupPiece
 }
 
 
