@@ -48,7 +48,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             return;
         }
 
-        curLevel = GameManager.ins.levels[DataManager.ins.dt.level];
+        curLevel = GameManager.ins.levels[DataManager.ins.dt.level % GameManager.ins.levels.Count];
 
         pieces = new Piece[curLevel.boardSize.x, curLevel.boardSize.y];
         width = curLevel.boardSize.x;
@@ -85,7 +85,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             {
                 if (spawnIndex >= spawnCount)
                 {
-                    RebuildGroups();
+                    PrepareInitialBoardGroups();
                     return;
                 }
 
@@ -111,7 +111,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             }
         }
 
-        RebuildGroups();
+        PrepareInitialBoardGroups();
     }
 
     int GetSpawnCount(int availablePieceCount)
@@ -591,6 +591,11 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     void RebuildGroups()
     {
+        RebuildGroups(true);
+    }
+
+    void RebuildGroups(bool checkCompleted)
+    {
         if (pieces == null || pieceGroupPrb == null)
         {
             return;
@@ -621,7 +626,10 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         }
 
         UpdateAllPieceBorders();
-        CheckCompletedGroups();
+        if (checkCompleted)
+        {
+            CheckCompletedGroups();
+        }
     }
 
     void RebuildGroupsAfterMove()
@@ -642,6 +650,102 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             }
             rebuildTween = null;
         });
+    }
+
+    void PrepareInitialBoardGroups()
+    {
+        RebuildGroups(false);
+        BreakInitialCompletedGroups();
+        RebuildGroups(false);
+    }
+
+    void BreakInitialCompletedGroups()
+    {
+        int guard = 0;
+        while (TryGetCompletedGroup(out PieceGroup completedGroup) && guard < 100)
+        {
+            Piece pieceInCompletedGroup = GetFirstPiece(completedGroup);
+            Piece swapPiece = FindSwapPieceOutsideGroup(completedGroup);
+            if (pieceInCompletedGroup == null || swapPiece == null)
+            {
+                return;
+            }
+
+            SwapPieceDataOnly(pieceInCompletedGroup, swapPiece);
+            RebuildGroups(false);
+            guard++;
+        }
+    }
+
+    bool TryGetCompletedGroup(out PieceGroup completedGroup)
+    {
+        completedGroup = null;
+        for (int i = 0; i < activeGroups.Count; i++)
+        {
+            PieceGroup group = activeGroups[i];
+            if (group != null && IsCompletedGroup(group))
+            {
+                completedGroup = group;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    Piece GetFirstPiece(PieceGroup group)
+    {
+        if (group == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < group.pieces.Count; i++)
+        {
+            if (group.pieces[i] != null)
+            {
+                return group.pieces[i];
+            }
+        }
+
+        return null;
+    }
+
+    Piece FindSwapPieceOutsideGroup(PieceGroup group)
+    {
+        for (int x = 0; x < pieces.GetLength(0); x++)
+        {
+            for (int y = 0; y < pieces.GetLength(1); y++)
+            {
+                Piece piece = pieces[x, y];
+                if (piece != null && !group.Contains(piece))
+                {
+                    return piece;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    void SwapPieceDataOnly(Piece firstPiece, Piece secondPiece)
+    {
+        Vector2Int firstCell = firstPiece.posInBoard;
+        Vector2Int secondCell = secondPiece.posInBoard;
+        Vector3 firstSnap = firstPiece.GetSnapPosition();
+        Vector3 secondSnap = secondPiece.GetSnapPosition();
+
+        pieces[firstCell.x, firstCell.y] = secondPiece;
+        pieces[secondCell.x, secondCell.y] = firstPiece;
+
+        firstPiece.SetPosInBoard(secondCell.x, secondCell.y);
+        secondPiece.SetPosInBoard(firstCell.x, firstCell.y);
+
+        firstPiece.SetSnapPositionOnly(secondSnap);
+        secondPiece.SetSnapPositionOnly(firstSnap);
+
+        firstPiece.SetSnapPosition(secondSnap);
+        secondPiece.SetSnapPosition(firstSnap);
     }
 
     public void LockInputForMove()
@@ -1282,6 +1386,8 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     {
         if (IsWin())
         {
+            UIManager.ins.OpenUI(UIID.UICVictory);
+            DataManager.ins.dt.level = DataManager.ins.dt.level % GameManager.ins.levels.Count + 1;
             Debug.Log("You win!");
         }
     }

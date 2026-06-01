@@ -68,6 +68,7 @@ public class GameManager : MonoBehaviour
         yield return Cache.GetWFS(1f);
 
         LoadingScreen.ins.SetPercent(1f, 1f);
+        yield return Cache.GetWFS(.5f);
 
         var sync = SceneManager.LoadSceneAsync("Home");
 

@@ -1,17 +1,15 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class CanvasVictory : UICanvas
 {
-    public override void Open()
+    public void HomeBtn()
     {
-        base.Open();
+        UIManager.ins.CloseUI(UIID.UICVictory);
+        var sync = SceneManager.LoadSceneAsync("Home");
     }
-    
-    public override void Close()
-    {
-        base.Close();
-    }
+        
 }
