@@ -8,5 +8,6 @@ public class LevelSO : ScriptableObject
     public Vector2Int boardSize = new Vector2Int(6, 6);
     public int initialPieceCount;
     public bool shufflePieces = true;
+    public bool lockTopRows;
     public List<PictureSO> pictures = new List<PictureSO>();
 }

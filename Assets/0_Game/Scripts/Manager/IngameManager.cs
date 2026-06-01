@@ -10,10 +10,12 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     public PieceGroup pieceGroupPrb;
     public int height = 6;
     public int width = 6;
+    public int lockedTopRows = 1;
     public bool playSpawnFlip = true;
     public float flipDelayEachPiece = 0.02f;
     const float PieceMoveDuration = 0.17f;
     const float CompleteClearDuration = 0.35f;
+    const float CompleteFlashDuration = 0.08f;
 
     public Piece[,] pieces;
     Queue<SpawnPieceData>[] columnDecks;
@@ -33,6 +35,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     private void Start()
     {
+        UIManager.ins.OpenUI(UIID.UICGamePlay);
         BuildBoard();
     }
 
@@ -329,12 +332,19 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     public void MovePieceToCell(Piece piece, Vector2Int targetCell)
     {
-        if (IsInputLocked || piece == null || !IsInBoard(targetCell))
+        if (IsInputLocked || piece == null || !IsInBoard(targetCell) || IsLockedRow(targetCell))
         {
+            if (piece != null)
+            {
+                LockInputForMove();
+                piece.MoveToSnapPosition();
+            }
+
             return;
         }
 
         Vector2Int oldCell = piece.posInBoard;
+        bool wasConnectedBeforeMove = CanConnectWithNeighbor(piece);
         if (oldCell == targetCell)
         {
             LockInputForMove();
@@ -345,6 +355,13 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         Piece targetPiece = pieces[targetCell.x, targetCell.y];
         if (targetPiece != null)
         {
+            if (IsLockedRow(targetCell))
+            {
+                LockInputForMove();
+                piece.MoveToSnapPosition();
+                return;
+            }
+
             SwapPieces(piece, targetPiece);
             return;
         }
@@ -356,7 +373,15 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         piece.SetPosInBoard(targetCell.x, targetCell.y);
         piece.SetSnapPositionOnly(GetBoardWorldPosition(targetCell.x, targetCell.y));
         piece.MoveToSnapPosition();
-        ApplyGravity();
+
+        if (!wasConnectedBeforeMove && CanConnectWithNeighbor(piece))
+        {
+            ApplyGravity(piece);
+        }
+        else
+        {
+            ApplyGravity();
+        }
 
         RebuildGroupsAfterMove();
     }
@@ -387,6 +412,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
         firstPiece.MoveToSnapPosition();
         secondPiece.MoveToSnapPosition();
+        ApplyGravityKeepingConnectedPieces();
 
         RebuildGroupsAfterMove();
     }
@@ -409,7 +435,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             return;
         }
 
-        if (group == null || grabbedPiece == null || !IsInBoard(targetCell))
+        if (group == null || grabbedPiece == null || !IsInBoard(targetCell) || IsLockedRow(targetCell))
         {
             MoveGroupBack(group);
             return;
@@ -440,7 +466,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
             Vector2Int oldCell = piece.posInBoard;
             Vector2Int newCell = oldCell + offset;
-            if (!IsInBoard(newCell))
+            if (!IsInBoard(newCell) || IsLockedRow(newCell))
             {
                 MoveGroupBack(group);
                 return;
@@ -459,6 +485,12 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             }
             else if (!group.Contains(swapPiece))
             {
+                if (IsLockedRow(newCells[i]))
+                {
+                    MoveGroupBack(group);
+                    return;
+                }
+
                 swapPieces.Add(swapPiece);
             }
         }
@@ -685,16 +717,53 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         {
             PieceGroup group = completedGroups[i];
             group.transform.DOKill();
-            group.transform.DOScale(Vector3.zero, CompleteClearDuration).SetEase(Ease.InBack);
+            PlayCompleteFlash(group);
+            DOVirtual.DelayedCall(CompleteFlashDuration, () =>
+            {
+                if (group != null)
+                {
+                    group.transform.DOScale(Vector3.zero, CompleteClearDuration).SetEase(Ease.InBack);
+                }
+            });
         }
 
-        DOVirtual.DelayedCall(CompleteClearDuration, () =>
+        DOVirtual.DelayedCall(CompleteFlashDuration + CompleteClearDuration, () =>
         {
             ClearCompletedGroups(completedGroups);
             ApplyGravity();
             RebuildGroupsAfterMove();
             isResolvingComplete = false;
         });
+    }
+
+    void PlayCompleteFlash(PieceGroup group)
+    {
+        if (group == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < group.pieces.Count; i++)
+        {
+            Piece piece = group.pieces[i];
+            if (piece == null || piece.pieceSprite == null)
+            {
+                continue;
+            }
+
+            SpriteRenderer renderer = piece.pieceSprite;
+            Color startColor = renderer.color;
+            renderer.DOKill();
+            renderer.DOColor(Color.white, CompleteFlashDuration * 0.45f)
+                .SetEase(Ease.OutQuad)
+                .OnComplete(() =>
+                {
+                    if (renderer != null)
+                    {
+                        renderer.DOColor(startColor, CompleteFlashDuration * 0.55f).SetEase(Ease.InQuad);
+                    }
+                });
+        }
     }
 
     bool IsCompletedGroup(PieceGroup group)
@@ -775,6 +844,22 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     void ApplyGravity()
     {
+        ApplyGravity(null, false);
+    }
+
+    void ApplyGravity(Piece pinnedPiece)
+    {
+        ApplyGravity(pinnedPiece, false);
+    }
+
+    void ApplyGravityKeepingConnectedPieces()
+    {
+        ApplyGravity(null, true);
+    }
+
+    void ApplyGravity(Piece pinnedPiece, bool keepConnectedPieces)
+    {
+        HashSet<Piece> pinnedPieces = BuildGravityPinnedPieces(pinnedPiece, keepConnectedPieces);
         ClearGroups();
 
         for (int x = 0; x < width; x++)
@@ -786,6 +871,12 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
                 Piece piece = pieces[x, readY];
                 if (piece == null)
                 {
+                    continue;
+                }
+
+                if (pinnedPieces.Contains(piece))
+                {
+                    writeY = readY + 1;
                     continue;
                 }
 
@@ -804,6 +895,59 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
             FillColumnFromDeck(x, writeY);
         }
+    }
+
+    HashSet<Piece> BuildGravityPinnedPieces(Piece pinnedPiece, bool keepConnectedPieces)
+    {
+        HashSet<Piece> pinnedPieces = new HashSet<Piece>();
+        if (pinnedPiece != null)
+        {
+            pinnedPieces.Add(pinnedPiece);
+        }
+
+        if (!keepConnectedPieces || pieces == null)
+        {
+            return pinnedPieces;
+        }
+
+        for (int x = 0; x < pieces.GetLength(0); x++)
+        {
+            for (int y = 0; y < pieces.GetLength(1); y++)
+            {
+                Piece piece = pieces[x, y];
+                if (piece != null && CanConnectWithNeighbor(piece))
+                {
+                    pinnedPieces.Add(piece);
+                }
+            }
+        }
+
+        return pinnedPieces;
+    }
+
+    bool CanConnectWithNeighbor(Piece piece)
+    {
+        return CanConnectWithNeighbor(piece, Vector2Int.up)
+            || CanConnectWithNeighbor(piece, Vector2Int.right)
+            || CanConnectWithNeighbor(piece, Vector2Int.down)
+            || CanConnectWithNeighbor(piece, Vector2Int.left);
+    }
+
+    bool CanConnectWithNeighbor(Piece piece, Vector2Int direction)
+    {
+        if (piece == null)
+        {
+            return false;
+        }
+
+        Vector2Int neighborCell = piece.posInBoard + direction;
+        if (!IsInBoard(neighborCell))
+        {
+            return false;
+        }
+
+        Piece neighbor = pieces[neighborCell.x, neighborCell.y];
+        return neighbor != null && CanGroup(piece, neighbor);
     }
 
     void FillColumnFromDeck(int x, int startY)
@@ -1057,6 +1201,15 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             && cell.x < pieces.GetLength(0)
             && cell.y >= 0
             && cell.y < pieces.GetLength(1);
+    }
+
+    public bool IsLockedRow(Vector2Int cell)
+    {
+        return curLevel != null
+            && curLevel.lockTopRows
+            && lockedTopRows > 0
+            && IsInBoard(cell)
+            && cell.y >= height - lockedTopRows;
     }
 
     Vector2 GetPieceSize(Piece piece)

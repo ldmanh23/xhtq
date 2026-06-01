@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class CanvasMainMenu : UICanvas
 {
@@ -13,5 +14,12 @@ public class CanvasMainMenu : UICanvas
     {
         base.Close();
     }
+
+    public void PlayBtn()
+    {
+        UIManager.ins.CloseUI(UIID.UICMainMenu);
+        var sync = SceneManager.LoadSceneAsync("GamePlay");     
+    }
+        
 
 }

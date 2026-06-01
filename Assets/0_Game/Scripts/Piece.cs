@@ -172,6 +172,11 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
 
     public void OnPointerDown(PointerEventData eventData)
     {
+        if (IngameManager.ins != null && IngameManager.ins.IsLockedRow(posInBoard))
+        {
+            return;
+        }
+
         pointerDownGroup = GetCurrentGroup();
         if (pointerDownGroup != null)
         {
@@ -192,9 +197,9 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
 
     public void OnBeginDrag(PointerEventData eventData)
     {
-        if (IngameManager.ins != null && IngameManager.ins.IsInputLocked)
+        if (IngameManager.ins != null && (IngameManager.ins.IsInputLocked || IngameManager.ins.IsLockedRow(posInBoard)))
         {
-            ResetOrder();
+            ResetPointerDownOrder();
             dragTransform = null;
             dragGroup = null;
             return;
