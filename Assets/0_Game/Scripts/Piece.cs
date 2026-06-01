@@ -19,6 +19,7 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
     Sprite backSprite;
     Vector3 defaultPieceScale = Vector3.one;
     Vector3 defaultPictureScale = Vector3.one;
+    Color defaultPictureColor = Color.white;
     Vector3 dragOffset;
     Vector3 snapPosition;
     float dragZ;
@@ -39,6 +40,8 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
     public override void OnDespawn()
     {
         KillFlip();
+        ResetVisualState();
+        ResetBordersImmediate();
     }
 
     private void Awake()
@@ -54,6 +57,7 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
         if (pieceSprite != null)
         {
             defaultPictureScale = pieceSprite.transform.localScale;
+            defaultPictureColor = pieceSprite.color;
         }
 
         defOrder = spriteRenderer.sortingOrder;
@@ -65,7 +69,8 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
         pictureId = pictureSO != null ? pictureSO.pictureId : 0;
         this.localCell = localCell;
         SetPosInBoard(x, y);
-        ResetBorders();
+        ResetVisualState();
+        ResetBordersImmediate();
 
         KillFlip();
         ApplyPictureOverlap();
@@ -111,6 +116,15 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
             .OnComplete(() => ResetOrder());
     }
 
+    public void ForceToSnapPosition()
+    {
+        transform.DOKill();
+        transform.position = snapPosition;
+        transform.localScale = defaultPieceScale;
+        ResetOrder();
+        ApplyPictureOverlap();
+    }
+
     void SetSprite(Sprite sprite)
     {
         SpriteRenderer targetSprite = GetTargetSprite();
@@ -129,6 +143,19 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
         if (pieceSprite != null)
         {
             pieceSprite.transform.localScale = defaultPictureScale * pictureOverlapScale;
+        }
+    }
+
+    void ResetVisualState()
+    {
+        transform.DOKill();
+        transform.localScale = defaultPieceScale;
+
+        if (pieceSprite != null)
+        {
+            pieceSprite.DOKill();
+            pieceSprite.color = defaultPictureColor;
+            pieceSprite.transform.localScale = defaultPictureScale;
         }
     }
 
@@ -316,6 +343,29 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
         SetBorderVisible(Vector2Int.right, true);
         SetBorderVisible(Vector2Int.down, true);
         SetBorderVisible(Vector2Int.left, true);
+    }
+
+    void ResetBordersImmediate()
+    {
+        SetBorderVisibleImmediate(Vector2Int.up, true);
+        SetBorderVisibleImmediate(Vector2Int.right, true);
+        SetBorderVisibleImmediate(Vector2Int.down, true);
+        SetBorderVisibleImmediate(Vector2Int.left, true);
+    }
+
+    void SetBorderVisibleImmediate(Vector2Int direction, bool visible)
+    {
+        SpriteRenderer border = GetBorder(direction);
+        if (border == null)
+        {
+            return;
+        }
+
+        border.DOKill();
+        border.gameObject.SetActive(visible);
+        Color color = border.color;
+        color.a = visible ? 1f : 0f;
+        border.color = color;
     }
 
     public void SetBorderVisible(Vector2Int direction, bool visible)

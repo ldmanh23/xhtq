@@ -1141,6 +1141,11 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             return false;
         }
 
+        if (IsLockedRow(a.posInBoard) || IsLockedRow(b.posInBoard))
+        {
+            return false;
+        }
+
         Vector2Int boardDelta = b.posInBoard - a.posInBoard;
         Vector2Int localDelta = b.localCell - a.localCell;
         return boardDelta == localDelta && Mathf.Abs(boardDelta.x) + Mathf.Abs(boardDelta.y) == 1;
@@ -1151,6 +1156,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         Vector3 center = Vector3.zero;
         for (int i = 0; i < groupPieces.Count; i++)
         {
+            groupPieces[i].ForceToSnapPosition();
             center += groupPieces[i].transform.position;
         }
 
