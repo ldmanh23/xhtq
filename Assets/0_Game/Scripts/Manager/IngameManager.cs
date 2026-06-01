@@ -20,6 +20,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     public Piece[,] pieces;
     Queue<SpawnPieceData>[] columnDecks;
     readonly List<PieceGroup> activeGroups = new List<PieceGroup>();
+    List<HashSet<string>> pendingOldGroupSetsForScale;
     Transform boardParent;
     Tween rebuildTween;
     bool isResolvingComplete;
@@ -593,7 +594,8 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             return;
         }
 
-        List<HashSet<string>> oldGroupSets = GetActiveGroupStateSets();
+        List<HashSet<string>> oldGroupSets = pendingOldGroupSetsForScale ?? GetActiveGroupIdSets();
+        pendingOldGroupSetsForScale = null;
         ClearGroups();
 
         HashSet<Piece> visited = new HashSet<Piece>();
@@ -860,6 +862,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     void ApplyGravity(Piece pinnedPiece, bool keepConnectedPieces)
     {
         HashSet<Piece> pinnedPieces = BuildGravityPinnedPieces(pinnedPiece, keepConnectedPieces);
+        pendingOldGroupSetsForScale = GetActiveGroupIdSets();
         ClearGroups();
 
         for (int x = 0; x < width; x++)
@@ -1107,7 +1110,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         piece.SetBorderVisible(direction, !shouldHide);
     }
 
-    List<HashSet<string>> GetActiveGroupStateSets()
+    List<HashSet<string>> GetActiveGroupIdSets()
     {
         List<HashSet<string>> sets = new List<HashSet<string>>();
         for (int i = 0; i < activeGroups.Count; i++)
@@ -1115,7 +1118,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             PieceGroup group = activeGroups[i];
             if (group != null && group.pieces.Count >= 2)
             {
-                sets.Add(BuildGroupStateSet(group.pieces));
+                sets.Add(BuildGroupIdSet(group.pieces));
             }
         }
 
@@ -1137,34 +1140,34 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         return ids;
     }
 
-    HashSet<string> BuildGroupStateSet(List<Piece> groupPieces)
-    {
-        HashSet<string> states = new HashSet<string>();
-        for (int i = 0; i < groupPieces.Count; i++)
-        {
-            Piece piece = groupPieces[i];
-            if (piece != null)
-            {
-                states.Add(piece.pictureId + "_" + piece.localCell.x + "_" + piece.localCell.y
-                    + "_" + piece.posInBoard.x + "_" + piece.posInBoard.y);
-            }
-        }
-
-        return states;
-    }
-
     bool ShouldScaleNewGroup(List<Piece> groupPieces, List<HashSet<string>> oldGroupSets)
     {
-        HashSet<string> newSet = BuildGroupStateSet(groupPieces);
+        HashSet<string> newSet = BuildGroupIdSet(groupPieces);
+        int bestOldOverlap = 0;
+
         for (int i = 0; i < oldGroupSets.Count; i++)
         {
             if (newSet.SetEquals(oldGroupSets[i]))
             {
                 return false;
             }
+
+            int overlap = 0;
+            foreach (string id in newSet)
+            {
+                if (oldGroupSets[i].Contains(id))
+                {
+                    overlap++;
+                }
+            }
+
+            if (overlap > bestOldOverlap)
+            {
+                bestOldOverlap = overlap;
+            }
         }
 
-        return true;
+        return newSet.Count > bestOldOverlap;
     }
 
     void PlayGroupMergeScale(PieceGroup group)
