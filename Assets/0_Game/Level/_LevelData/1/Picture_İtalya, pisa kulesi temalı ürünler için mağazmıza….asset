@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b52459cfced2df468413d718311635f, type: 3}
+  m_Name: "Picture_\u0130talya, pisa kulesi temal\u0131 \xFCr\xFCnler i\xE7in ma\u011Fazm\u0131za\u2026"
+  m_EditorClassIdentifier: 
+  pictureId: 16
+  pictureName: "\u0130talya, pisa kulesi temal\u0131 \xFCr\xFCnler i\xE7in ma\u011Fazm\u0131za\u2026"
+  size: {x: 2, y: 2}
+  fullSprite: {fileID: 21300000, guid: 06a99b2623c244e41b9af285e4e9eb21, type: 3}
+  pieces:
+  - localCell: {x: 0, y: 0}
+    sprite: {fileID: 21300000, guid: 1d0fd5b19b9501e46877e7b03ae3507b, type: 3}
+  - localCell: {x: 1, y: 0}
+    sprite: {fileID: 21300000, guid: 1e32b97ee0027b240ac792223e6daf13, type: 3}
+  - localCell: {x: 0, y: 1}
+    sprite: {fileID: 21300000, guid: 485f697c47016a9429d2d92fc21f2e5b, type: 3}
+  - localCell: {x: 1, y: 1}
+    sprite: {fileID: 21300000, guid: 2901f131e01e55644b8042432cf85bf8, type: 3}

@@ -8,7 +8,9 @@ public class GameManager : MonoBehaviour
 {
     public static GameManager ins;
     private static GameState gameState = GameState.MainMenu;
-    
+
+    public List<LevelSO> levels = new List<LevelSO>();
+
     protected void Awake()
     {
         ins = this;

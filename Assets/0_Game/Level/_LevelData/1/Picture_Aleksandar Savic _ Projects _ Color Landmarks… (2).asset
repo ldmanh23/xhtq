@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b52459cfced2df468413d718311635f, type: 3}
+  m_Name: "Picture_Aleksandar Savic _ Projects _ Color Landmarks\u2026 (2)"
+  m_EditorClassIdentifier: 
+  pictureId: 12
+  pictureName: "Aleksandar Savic _ Projects _ Color Landmarks\u2026 (2)"
+  size: {x: 2, y: 2}
+  fullSprite: {fileID: 21300000, guid: 374c5a15559e1764a8139a5bb912f2f3, type: 3}
+  pieces:
+  - localCell: {x: 0, y: 0}
+    sprite: {fileID: 21300000, guid: a84fc278d89ebbb459768953b7dd8731, type: 3}
+  - localCell: {x: 1, y: 0}
+    sprite: {fileID: 21300000, guid: 05ef36d2d8bb7fa438ff592a4a4c31d9, type: 3}
+  - localCell: {x: 0, y: 1}
+    sprite: {fileID: 21300000, guid: e3f733932999b1349956c9e0e231e303, type: 3}
+  - localCell: {x: 1, y: 1}
+    sprite: {fileID: 21300000, guid: 911ccb688dadbbb499e368e65e4d228b, type: 3}

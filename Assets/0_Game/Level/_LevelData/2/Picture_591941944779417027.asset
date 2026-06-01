@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b52459cfced2df468413d718311635f, type: 3}
+  m_Name: Picture_591941944779417027
+  m_EditorClassIdentifier: 
+  pictureId: 7
+  pictureName: 591941944779417027
+  size: {x: 3, y: 2}
+  fullSprite: {fileID: 21300000, guid: 6be180d1fb342de42b87e8ff05c9c202, type: 3}
+  pieces:
+  - localCell: {x: 0, y: 0}
+    sprite: {fileID: 21300000, guid: d4e4f96ee6f922a49a9346640dae2cd6, type: 3}
+  - localCell: {x: 1, y: 0}
+    sprite: {fileID: 21300000, guid: 51256ee16036d58428ea6be653ed58b9, type: 3}
+  - localCell: {x: 2, y: 0}
+    sprite: {fileID: 21300000, guid: c04c4cb680b276c4d82831aaf66209e1, type: 3}
+  - localCell: {x: 0, y: 1}
+    sprite: {fileID: 21300000, guid: 00c5fdf6da1e84549af8896b6f152458, type: 3}
+  - localCell: {x: 1, y: 1}
+    sprite: {fileID: 21300000, guid: c18e3afb66b205a4c8ec7f4cb29cebf3, type: 3}
+  - localCell: {x: 2, y: 1}
+    sprite: {fileID: 21300000, guid: 8e646a301ee903446aa701cec1195bdb, type: 3}

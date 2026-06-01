@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b52459cfced2df468413d718311635f, type: 3}
+  m_Name: "Picture_t\u1EA3i xu\u1ED1ng (12)"
+  m_EditorClassIdentifier: 
+  pictureId: 14
+  pictureName: "t\u1EA3i xu\u1ED1ng (12)"
+  size: {x: 2, y: 2}
+  fullSprite: {fileID: 21300000, guid: 8ab1f28e7ef2b454396b5cffe3837529, type: 3}
+  pieces:
+  - localCell: {x: 0, y: 0}
+    sprite: {fileID: 21300000, guid: 668189bf7f43a074c9c53b446311db81, type: 3}
+  - localCell: {x: 1, y: 0}
+    sprite: {fileID: 21300000, guid: d9a759b798f9c7d41b674214e8403505, type: 3}
+  - localCell: {x: 0, y: 1}
+    sprite: {fileID: 21300000, guid: 79697b2e34b737d4dbcf299ca69f0508, type: 3}
+  - localCell: {x: 1, y: 1}
+    sprite: {fileID: 21300000, guid: 5805bb357e65a814a9f26da5f9facda2, type: 3}

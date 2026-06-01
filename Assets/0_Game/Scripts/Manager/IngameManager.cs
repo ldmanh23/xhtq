@@ -48,6 +48,8 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             return;
         }
 
+        curLevel = GameManager.ins.levels[DataManager.ins.dt.level];
+
         pieces = new Piece[curLevel.boardSize.x, curLevel.boardSize.y];
         width = curLevel.boardSize.x;
         height = curLevel.boardSize.y;
