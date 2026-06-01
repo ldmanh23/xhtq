@@ -728,7 +728,15 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
         if (hasEmptyTargetCell)
         {
-            ApplyGravity();
+            List<Piece> connectedPieces = GetConnectedPieces(groupPieces);
+            if (connectedPieces.Count > groupPieces.Count)
+            {
+                ApplyGravity(connectedPieces);
+            }
+            else
+            {
+                ApplyGravity();
+            }
         }
 
         RebuildGroupsAfterMove();
@@ -1129,7 +1137,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     void ApplyGravity()
     {
-        ApplyGravity(null, false);
+        ApplyGravity((Piece)null, false);
     }
 
     void ApplyGravity(Piece pinnedPiece)
@@ -1137,14 +1145,36 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         ApplyGravity(pinnedPiece, false);
     }
 
+    void ApplyGravity(List<Piece> pinnedPieces)
+    {
+        HashSet<Piece> pinnedSet = new HashSet<Piece>();
+        if (pinnedPieces != null)
+        {
+            for (int i = 0; i < pinnedPieces.Count; i++)
+            {
+                if (pinnedPieces[i] != null)
+                {
+                    pinnedSet.Add(pinnedPieces[i]);
+                }
+            }
+        }
+
+        ApplyGravity(pinnedSet);
+    }
+
     void ApplyGravityKeepingConnectedPieces()
     {
-        ApplyGravity(null, true);
+        ApplyGravity((Piece)null, true);
     }
 
     void ApplyGravity(Piece pinnedPiece, bool keepConnectedPieces)
     {
         HashSet<Piece> pinnedPieces = BuildGravityPinnedPieces(pinnedPiece, keepConnectedPieces);
+        ApplyGravity(pinnedPieces);
+    }
+
+    void ApplyGravity(HashSet<Piece> pinnedPieces)
+    {
         pendingOldGroupSetsForScale = GetActiveGroupIdSets();
         ClearGroups();
 
@@ -1209,6 +1239,58 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         }
 
         return pinnedPieces;
+    }
+
+    List<Piece> GetConnectedPieces(List<Piece> startPieces)
+    {
+        List<Piece> result = new List<Piece>();
+        if (startPieces == null || startPieces.Count == 0)
+        {
+            return result;
+        }
+
+        HashSet<Piece> visited = new HashSet<Piece>();
+        Queue<Piece> queue = new Queue<Piece>();
+
+        for (int i = 0; i < startPieces.Count; i++)
+        {
+            Piece piece = startPieces[i];
+            if (piece != null && visited.Add(piece))
+            {
+                queue.Enqueue(piece);
+            }
+        }
+
+        while (queue.Count > 0)
+        {
+            Piece piece = queue.Dequeue();
+            result.Add(piece);
+
+            AddConnectedNeighbor(piece, Vector2Int.up, visited, queue);
+            AddConnectedNeighbor(piece, Vector2Int.right, visited, queue);
+            AddConnectedNeighbor(piece, Vector2Int.down, visited, queue);
+            AddConnectedNeighbor(piece, Vector2Int.left, visited, queue);
+        }
+
+        return result;
+    }
+
+    void AddConnectedNeighbor(Piece piece, Vector2Int direction, HashSet<Piece> visited, Queue<Piece> queue)
+    {
+        Vector2Int neighborCell = piece.posInBoard + direction;
+        if (!IsInBoard(neighborCell))
+        {
+            return;
+        }
+
+        Piece neighbor = pieces[neighborCell.x, neighborCell.y];
+        if (neighbor == null || visited.Contains(neighbor) || !CanGroup(piece, neighbor))
+        {
+            return;
+        }
+
+        visited.Add(neighbor);
+        queue.Enqueue(neighbor);
     }
 
     bool CanConnectWithNeighbor(Piece piece)
