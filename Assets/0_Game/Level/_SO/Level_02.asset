@@ -12,26 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c0d9cd6649b5f80488a109c435f59037, type: 3}
   m_Name: Level_02
   m_EditorClassIdentifier: 
-  levelIndex: 1
   boardSize: {x: 6, y: 6}
   initialPieceCount: 0
   shufflePieces: 1
   lockTopRows: 0
-  pictures:
-  - {fileID: 11400000, guid: 82e121f0fa7f7e14981d7c01c50c26e7, type: 2}
-  - {fileID: 11400000, guid: 3852b5190c318e345a792516ec30f30e, type: 2}
-  - {fileID: 11400000, guid: 8c827a508a3ed524a945848ed749e1d7, type: 2}
-  - {fileID: 11400000, guid: d0e21f4afe7c57d4e8d5d264d1c05650, type: 2}
-  - {fileID: 11400000, guid: 00c1bb0e8658f6343ac73c6c62479e72, type: 2}
-  - {fileID: 11400000, guid: 38e39c89f7ad5f145a2589d6a4d6c047, type: 2}
-  - {fileID: 11400000, guid: 5ed46f0bbfc2d0b4aaab98f816eed4b0, type: 2}
-  - {fileID: 11400000, guid: ba2c8334586593444b1a84e5e9377523, type: 2}
-  - {fileID: 11400000, guid: f85934b1c6caf79478f9c0919bece6dd, type: 2}
-  - {fileID: 11400000, guid: 798c47edd1de9dd458ca9c94b018fd17, type: 2}
-  - {fileID: 11400000, guid: dbe580fbe80d17a44b8f12be28b361e3, type: 2}
-  - {fileID: 11400000, guid: 5bdda2f34c8b0c74d92be6c9f6a38a22, type: 2}
-  - {fileID: 11400000, guid: a74a471d40312074faff44d5c83495b2, type: 2}
-  - {fileID: 11400000, guid: 68c8c943fc18ae04e844b63ccf8f997d, type: 2}
-  - {fileID: 11400000, guid: 95c2b479b7af815449acfccad0fe5a8d, type: 2}
-  - {fileID: 11400000, guid: df2211e8e0337c64eb4a26070e1fdff7, type: 2}
-  - {fileID: 11400000, guid: 6eff5b940c96a2f44b98a903363047c1, type: 2}
+  resourcesImageFolder: LevelImg/1
+  imageCount: 16

@@ -1177,6 +1177,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 915460453}
     m_Modifications:
+    - target: {fileID: 8070103426239052326, guid: 39a3afe069036e74381eb5ea3a89ea72, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
+      value: HomeBtn
+      objectReference: {fileID: 0}
     - target: {fileID: 8070103426510838464, guid: 39a3afe069036e74381eb5ea3a89ea72, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5
@@ -1318,6 +1322,9 @@ MonoBehaviour:
   levels:
   - {fileID: 11400000, guid: 5fd17e3aafec14044b53bbca9b353cf7, type: 2}
   - {fileID: 11400000, guid: 385843bf5baae5448a72d39c92c2eb77, type: 2}
+  - {fileID: 11400000, guid: a514c5f35bc8ad146a2407259e4f3b34, type: 2}
+  - {fileID: 11400000, guid: eae6f915a7150b24682f3178f9766a67, type: 2}
+  - {fileID: 11400000, guid: 4d364c82467fc9b4083b3771098fb6d3, type: 2}
 --- !u!4 &1618056715
 Transform:
   m_ObjectHideFlags: 0
