@@ -100,6 +100,18 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
         }
     }
 
+    public void ApplySpawnData(IngameManager.SpawnPieceData data, bool updateSprite = true)
+    {
+        pictureSO = data.pictureSO;
+        pictureId = pictureSO != null ? pictureSO.pictureId : 0;
+        localCell = data.localCell;
+
+        if (updateSprite)
+        {
+            SetSprite(data.sprite);
+        }
+    }
+
     public void SetPosInBoard(int x, int y)
     {
         posInBoard = new Vector2Int(x, y);
@@ -195,6 +207,34 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
             flipSequence = null;
             _col.enabled = true;
         });
+    }
+
+    public void FlipToBack(float delay)
+    {
+        KillFlip();
+        _col.enabled = false;
+        transform.localScale = defaultPieceScale;
+
+        float halfDuration = flipDuration * 0.5f;
+        Vector3 closedScale = new Vector3(defaultPieceScale.x, 0f, defaultPieceScale.z);
+
+        flipSequence = DOTween.Sequence();
+        flipSequence.SetDelay(delay);
+        flipSequence.Append(transform.DOScale(closedScale, halfDuration).SetEase(Ease.InQuad));
+        flipSequence.AppendCallback(() => SetSprite(backSprite));
+        flipSequence.Append(transform.DOScale(defaultPieceScale, halfDuration).SetEase(Ease.OutQuad));
+        flipSequence.OnKill(() => flipSequence = null);
+        flipSequence.OnComplete(() =>
+        {
+            transform.localScale = defaultPieceScale;
+            flipSequence = null;
+        });
+    }
+
+    public void FlipRevealCurrent(float delay)
+    {
+        Sprite sprite = pictureSO != null ? pictureSO.GetSprite(localCell) : null;
+        FlipReveal(sprite, delay);
     }
 
     void KillFlip()

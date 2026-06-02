@@ -17,6 +17,11 @@ public class CanvasGameplay : UICanvas
         IngameManager.ins.BoosterClear();
     }
 
+    public void BoosterSort()
+    {
+        IngameManager.ins.BoosterSort();
+    }
+
     public void ShowHandTut(bool show)
     {
         if (hand_Tut == null)
