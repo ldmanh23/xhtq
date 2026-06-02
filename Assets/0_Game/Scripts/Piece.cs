@@ -338,7 +338,7 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
         SetBorderOrder(spriteRenderer.sortingOrder + 1);
     }
 
-    void SetOrderOffset(int offset)
+    public void SetOrderOffset(int offset)
     {
         spriteRenderer.sortingOrder = defOrder + offset;
         SetBorderOrder(spriteRenderer.sortingOrder + 1);

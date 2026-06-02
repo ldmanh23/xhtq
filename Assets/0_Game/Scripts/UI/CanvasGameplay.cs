@@ -4,13 +4,19 @@ using UnityEngine;
 
 public class CanvasGameplay : UICanvas
 {
-    public override void Open()
+
+    public GameObject hand_Tut; 
+
+    public void BoosterHint()
     {
-        base.Open();
+        IngameManager.ins.BoosterHint();
     }
-    
-    public override void Close()
+      
+    public void ShowHandTut(bool show)
     {
-        base.Close();
+        if(show)
+            hand_Tut.SetActive(true);
+        else
+            hand_Tut.SetActive(false);
     }
 }

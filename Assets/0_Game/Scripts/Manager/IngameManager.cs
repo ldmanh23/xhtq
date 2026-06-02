@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using DG.Tweening;
 using UnityEngine;
 
@@ -20,10 +19,11 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     public Piece[,] pieces;
     Queue<SpawnPieceData>[] columnDecks;
-    readonly List<PieceGroup> activeGroups = new List<PieceGroup>();
-    List<HashSet<string>> pendingOldGroupSetsForScale;
+    PuzzleGroupManager groupManager;
+    PuzzleGravityManager gravityManager;
     Transform boardParent;
     Tween rebuildTween;
+    Tween showHandTutTween;
     bool isResolvingComplete;
 
     public bool IsInputLocked { get; private set; }
@@ -37,8 +37,25 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     private void Start()
     {
-        UIManager.ins.OpenUI(UIID.UICGamePlay);
+        EnsureGroupManager();
         BuildBoard();
+        UIManager.ins.OpenUI(UIID.UICGamePlay);
+    }
+
+    void EnsureGroupManager()
+    {
+        if (groupManager == null)
+        {
+            groupManager = new PuzzleGroupManager(IsInBoard, IsLockedRow, IsCompletedGroup);
+        }
+    }
+
+    void EnsureGravityManager()
+    {
+        if (gravityManager == null)
+        {
+            gravityManager = new PuzzleGravityManager(IsInBoard, CanGroup, GetBoardWorldPosition);
+        }
     }
 
     public void BuildBoard()
@@ -94,7 +111,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             {
                 if (spawnIndex >= spawnCount)
                 {
-                    PrepareInitialBoardGroups();
+                    FinishInitialBoard(spawnCount);
                     return;
                 }
 
@@ -121,7 +138,56 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             }
         }
 
+        FinishInitialBoard(spawnCount);
+    }
+
+    void FinishInitialBoard(int spawnedPieceCount)
+    {
         PrepareInitialBoardGroups();
+        ScheduleShowHandTutAfterSpawnFlip(spawnedPieceCount);
+    }
+
+    void ScheduleShowHandTutAfterSpawnFlip(int spawnedPieceCount)
+    {
+        if (showHandTutTween != null)
+        {
+            showHandTutTween.Kill();
+            showHandTutTween = null;
+        }
+
+        CanvasGameplay gameplay = UIManager.ins != null
+            ? UIManager.ins.GetUI<CanvasGameplay>(UIID.UICGamePlay)
+            : null;
+
+        if (gameplay != null)
+        {
+            gameplay.ShowHandTut(false);
+        }
+
+        if (curLevel == null || !curLevel.isTutorialLevel)
+        {
+            return;
+        }
+
+        float delay = 0f;
+        if (playSpawnFlip && spawnedPieceCount > 0 && piecePrb != null)
+        {
+            delay = (spawnedPieceCount - 1) * flipDelayEachPiece + piecePrb.flipDuration;
+        }
+
+        showHandTutTween = DOVirtual.DelayedCall(delay, () =>
+        {
+            CanvasGameplay currentGameplay = UIManager.ins != null
+                ? UIManager.ins.GetUI<CanvasGameplay>(UIID.UICGamePlay)
+                : null;
+
+            if (currentGameplay != null)
+            {
+                currentGameplay.ShowHandTut(true);
+            }
+
+            showHandTutTween = null;
+        });
     }
 
     void ResolveCurrentLevel()
@@ -161,73 +227,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     List<SpawnPieceData> BuildSpawnPieces()
     {
-        return BuildRuntimeSpawnPieces();
-    }
-
-    List<SpawnPieceData> BuildRuntimeSpawnPieces()
-    {
-        List<SpawnPieceData> spawnPieces = new List<SpawnPieceData>();
-
-        if (string.IsNullOrEmpty(curLevel.resourcesImageFolder))
-        {
-            Debug.LogError("Runtime image folder is empty. Put images under Assets/Resources and set the folder path.");
-            return spawnPieces;
-        }
-
-        List<Texture2D> textures = new List<Texture2D>(Resources.LoadAll<Texture2D>(curLevel.resourcesImageFolder));
-        if (textures.Count == 0)
-        {
-            Debug.LogError($"No images found in Resources folder: {curLevel.resourcesImageFolder}");
-            return spawnPieces;
-        }
-
-        Shuffle(textures);
-
-        int imageCount = GetRuntimeImageCount(textures.Count);
-        int pictureId = 1;
-        int usedImages = 0;
-
-        for (int i = 0; i < textures.Count && usedImages < imageCount; i++)
-        {
-            Texture2D texture = textures[i];
-            if (texture == null)
-            {
-                continue;
-            }
-
-            if (!TryParsePictureSize(texture.name, out Vector2Int pictureSize))
-            {
-                Debug.LogWarning($"Skip image '{texture.name}'. File name must contain size like 2x3 or 2x1.");
-                continue;
-            }
-
-            PictureSO picture = CreateRuntimePicture(texture, pictureSize, pictureId);
-            pictureId++;
-            usedImages++;
-
-            for (int j = 0; j < picture.pieces.Count; j++)
-            {
-                PieceSpriteData pieceData = picture.pieces[j];
-                if (pieceData == null || pieceData.sprite == null)
-                {
-                    continue;
-                }
-
-                spawnPieces.Add(new SpawnPieceData
-                {
-                    pictureSO = picture,
-                    localCell = pieceData.localCell,
-                    sprite = pieceData.sprite
-                });
-            }
-        }
-
-        return spawnPieces;
-    }
-
-    int GetRuntimeImageCount(int availableImageCount)
-    {
-        return Mathf.Clamp(curLevel.imageCount, 0, availableImageCount);
+        return RuntimePictureBuilder.BuildSpawnPieces(curLevel, piecePrb);
     }
 
     int GetCurrentLevelIndex()
@@ -238,123 +238,6 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         }
 
         return Mathf.Max(0, DataManager.ins.dt.level);
-    }
-
-    bool TryParsePictureSize(string imageName, out Vector2Int pictureSize)
-    {
-        pictureSize = Vector2Int.zero;
-        Match match = Regex.Match(imageName, @"(\d+)\s*x\s*(\d+)", RegexOptions.IgnoreCase);
-        if (!match.Success)
-        {
-            return false;
-        }
-
-        int widthValue = int.Parse(match.Groups[1].Value);
-        int heightValue = int.Parse(match.Groups[2].Value);
-        if (widthValue <= 0 || heightValue <= 0)
-        {
-            return false;
-        }
-
-        pictureSize = new Vector2Int(widthValue, heightValue);
-        return true;
-    }
-
-    PictureSO CreateRuntimePicture(Texture2D texture, Vector2Int pictureSize, int pictureId)
-    {
-        PictureSO picture = ScriptableObject.CreateInstance<PictureSO>();
-        picture.pictureId = pictureId;
-        picture.pictureName = texture.name;
-        picture.size = pictureSize;
-
-        Rect sourceRect = GetRuntimePictureSourceRect(texture, pictureSize);
-        int tileWidth = Mathf.FloorToInt(sourceRect.width / pictureSize.x);
-        int tileHeight = Mathf.FloorToInt(sourceRect.height / pictureSize.y);
-        float pixelsPerUnit = GetRuntimeTilePixelsPerUnit(tileWidth);
-
-        picture.fullSprite = Sprite.Create(texture, sourceRect, Vector2.one * 0.5f, pixelsPerUnit);
-
-        for (int y = 0; y < pictureSize.y; y++)
-        {
-            for (int x = 0; x < pictureSize.x; x++)
-            {
-                Rect tileRect = new Rect(
-                    sourceRect.x + x * tileWidth,
-                    sourceRect.y + y * tileHeight,
-                    tileWidth,
-                    tileHeight
-                );
-
-                Sprite tileSprite = Sprite.Create(texture, tileRect, Vector2.one * 0.5f, pixelsPerUnit);
-                tileSprite.name = $"{texture.name}_{x}_{y}";
-
-                picture.pieces.Add(new PieceSpriteData
-                {
-                    localCell = new Vector2Int(x, y),
-                    sprite = tileSprite
-                });
-            }
-        }
-
-        return picture;
-    }
-
-    Rect GetRuntimePictureSourceRect(Texture2D texture, Vector2Int pictureSize)
-    {
-        Vector2 targetPieceSize = GetPiecePictureLocalSize();
-        if (targetPieceSize.x <= 0f || targetPieceSize.y <= 0f)
-        {
-            targetPieceSize = Vector2.one;
-        }
-
-        float targetPieceAspect = targetPieceSize.x / targetPieceSize.y;
-        float targetPictureAspect = pictureSize.x * targetPieceAspect / pictureSize.y;
-        float sourceAspect = (float)texture.width / texture.height;
-
-        int cropWidth = texture.width;
-        int cropHeight = texture.height;
-
-        if (sourceAspect > targetPictureAspect)
-        {
-            cropWidth = Mathf.RoundToInt(texture.height * targetPictureAspect);
-        }
-        else
-        {
-            cropHeight = Mathf.RoundToInt(texture.width / targetPictureAspect);
-        }
-
-        cropWidth = Mathf.Max(pictureSize.x, cropWidth - cropWidth % pictureSize.x);
-        cropHeight = Mathf.Max(pictureSize.y, cropHeight - cropHeight % pictureSize.y);
-
-        int cropX = Mathf.Max(0, (texture.width - cropWidth) / 2);
-        int cropY = Mathf.Max(0, (texture.height - cropHeight) / 2);
-
-        return new Rect(cropX, cropY, cropWidth, cropHeight);
-    }
-
-    float GetRuntimeTilePixelsPerUnit(int tileWidth)
-    {
-        Vector2 targetPieceSize = GetPiecePictureLocalSize();
-        if (targetPieceSize.x <= 0f)
-        {
-            return 100f;
-        }
-
-        return tileWidth / targetPieceSize.x;
-    }
-
-    Vector2 GetPiecePictureLocalSize()
-    {
-        SpriteRenderer target = piecePrb != null && piecePrb.pieceSprite != null
-            ? piecePrb.pieceSprite
-            : piecePrb != null ? piecePrb.spriteRenderer : null;
-
-        if (target == null || target.sprite == null)
-        {
-            return Vector2.one;
-        }
-
-        return target.sprite.bounds.size;
     }
 
     void BuildColumnDecks(List<SpawnPieceData> spawnPieces, int startIndex)
@@ -911,15 +794,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
         if (hasEmptyTargetCell)
         {
-            List<Piece> connectedPieces = GetConnectedPieces(groupPieces);
-            if (connectedPieces.Count > groupPieces.Count)
-            {
-                ApplyGravity(connectedPieces);
-            }
-            else
-            {
-                ApplyGravity();
-            }
+            ApplyGravityKeepingConnectedPieces();
         }
 
         RebuildGroupsAfterMove();
@@ -961,20 +836,6 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         }
     }
 
-    Vector3 GetSnapPositionBeforeSwap(Vector2Int cell, List<Vector2Int> cells, List<Vector3> snaps)
-    {
-        for (int i = 0; i < cells.Count; i++)
-        {
-            if (cells[i] == cell)
-            {
-                return snaps[i];
-            }
-        }
-
-        Piece piece = pieces[cell.x, cell.y];
-        return piece != null ? piece.GetSnapPosition() : Vector3.zero;
-    }
-
     void RebuildGroups()
     {
         RebuildGroups(true);
@@ -982,40 +843,8 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     void RebuildGroups(bool checkCompleted)
     {
-        if (pieces == null || pieceGroupPrb == null)
-        {
-            return;
-        }
-
-        List<HashSet<string>> oldGroupSets = pendingOldGroupSetsForScale ?? GetActiveGroupIdSets();
-        pendingOldGroupSetsForScale = null;
-        ClearGroups();
-
-        HashSet<Piece> visited = new HashSet<Piece>();
-
-        for (int x = 0; x < pieces.GetLength(0); x++)
-        {
-            for (int y = 0; y < pieces.GetLength(1); y++)
-            {
-                Piece piece = pieces[x, y];
-                if (piece == null || visited.Contains(piece))
-                {
-                    continue;
-                }
-
-                List<Piece> groupPieces = BuildGroup(piece, visited);
-                if (groupPieces.Count >= 2)
-                {
-                    CreateGroup(groupPieces, oldGroupSets);
-                }
-            }
-        }
-
-        UpdateAllPieceBorders();
-        if (checkCompleted)
-        {
-            CheckCompletedGroups();
-        }
+        EnsureGroupManager();
+        groupManager.Rebuild(pieces, pieceGroupPrb, boardParent, transform, checkCompleted, CheckCompletedGroups);
     }
 
     void RebuildGroupsAfterMove()
@@ -1066,9 +895,10 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     bool TryGetCompletedGroup(out PieceGroup completedGroup)
     {
         completedGroup = null;
-        for (int i = 0; i < activeGroups.Count; i++)
+        EnsureGroupManager();
+        for (int i = 0; i < groupManager.ActiveGroups.Count; i++)
         {
-            PieceGroup group = activeGroups[i];
+            PieceGroup group = groupManager.ActiveGroups[i];
             if (group != null && IsCompletedGroup(group))
             {
                 completedGroup = group;
@@ -1149,50 +979,14 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             rebuildTween = null;
         });
     }
-
-    void ClearGroups()
-    {
-        Transform parent = boardParent != null ? boardParent : transform;
-
-        for (int i = 0; i < activeGroups.Count; i++)
-        {
-            if (activeGroups[i] != null)
-            {
-                activeGroups[i].transform.DOKill();
-                activeGroups[i].transform.localScale = Vector3.one;
-            }
-        }
-
-        for (int x = 0; x < pieces.GetLength(0); x++)
-        {
-            for (int y = 0; y < pieces.GetLength(1); y++)
-            {
-                Piece piece = pieces[x, y];
-                if (piece != null)
-                {
-                    piece.transform.SetParent(parent, true);
-                }
-            }
-        }
-
-        for (int i = 0; i < activeGroups.Count; i++)
-        {
-            if (activeGroups[i] != null)
-            {
-                SimplePool.Despawn(activeGroups[i]);
-            }
-        }
-
-        activeGroups.Clear();
-    }
-
     void CheckCompletedGroups()
     {
         List<PieceGroup> completedGroups = new List<PieceGroup>();
 
-        for (int i = 0; i < activeGroups.Count; i++)
+        EnsureGroupManager();
+        for (int i = 0; i < groupManager.ActiveGroups.Count; i++)
         {
-            PieceGroup group = activeGroups[i];
+            PieceGroup group = groupManager.ActiveGroups[i];
             if (group != null && IsCompletedGroup(group))
             {
                 completedGroups.Add(group);
@@ -1332,7 +1126,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
                 SimplePool.Despawn(piece);
             }
 
-            activeGroups.Remove(group);
+            groupManager.ActiveGroups.Remove(group);
             SimplePool.Despawn(group);
         }
     }
@@ -1360,11 +1154,6 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     void ApplyGravity()
     {
         ApplyGravity((Piece)null, false);
-    }
-
-    void ApplyGravity(Piece pinnedPiece)
-    {
-        ApplyGravity(pinnedPiece, false);
     }
 
     void ApplyGravity(List<Piece> pinnedPieces)
@@ -1397,475 +1186,33 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     void ApplyGravity(HashSet<Piece> pinnedPieces)
     {
-        if (pinnedPieces == null)
-        {
-            pinnedPieces = new HashSet<Piece>();
-        }
-
-        pendingOldGroupSetsForScale = GetActiveGroupIdSets();
-        ClearGroups();
-
-        for (int x = 0; x < width; x++)
-        {
-            int segmentStartY = 0;
-            for (int y = 0; y <= height; y++)
-            {
-                bool isEnd = y == height;
-                bool isLockBlocker = !isEnd && pieces[x, y] != null && pieces[x, y].IsLock;
-                if (isEnd || isLockBlocker)
-                {
-                    ApplyGravitySegment(x, segmentStartY, y - 1, pinnedPieces, isEnd);
-                    segmentStartY = y + 1;
-                }
-            }
-        }
-    }
-
-    void ApplyGravitySegment(int x, int startY, int endY, HashSet<Piece> pinnedPieces, bool canRefillFromDeck)
-    {
-        if (startY > endY)
-        {
-            return;
-        }
-
-        List<Piece> movablePieces = new List<Piece>();
-        for (int y = startY; y <= endY; y++)
-        {
-            Piece piece = pieces[x, y];
-            if (piece == null || pinnedPieces.Contains(piece))
-            {
-                continue;
-            }
-
-            movablePieces.Add(piece);
-            pieces[x, y] = null;
-        }
-
-        int movableIndex = 0;
-        for (int y = startY; y <= endY; y++)
-        {
-            if (pieces[x, y] != null)
-            {
-                continue;
-            }
-
-            if (movableIndex >= movablePieces.Count)
-            {
-                break;
-            }
-
-            Piece piece = movablePieces[movableIndex];
-            pieces[x, y] = piece;
-
-            if (piece.posInBoard.x != x || piece.posInBoard.y != y)
-            {
-                piece.SetPosInBoard(x, y);
-                piece.SetSnapPositionOnly(GetBoardWorldPosition(x, y));
-                piece.MoveToSnapPosition();
-            }
-
-            movableIndex++;
-        }
-
-        if (canRefillFromDeck)
-        {
-            FillEmptyCellsFromDeck(x, startY, endY);
-        }
-    }
-
-    void FillEmptyCellsFromDeck(int x, int startY, int endY)
-    {
-        if (columnDecks == null || x < 0 || x >= columnDecks.Length || columnDecks[x] == null)
-        {
-            return;
-        }
-
-        int spawnOrder = 0;
-        for (int y = startY; y <= endY; y++)
-        {
-            if (pieces[x, y] != null)
-            {
-                continue;
-            }
-
-            if (columnDecks[x].Count == 0)
-            {
-                return;
-            }
-
-            SpawnPieceData data = columnDecks[x].Dequeue();
-            Piece piece = SimplePool.Spawn<Piece>(piecePrb);
-            if (boardParent != null)
-            {
-                piece.transform.SetParent(boardParent, false);
-            }
-
-            Vector3 targetPosition = GetBoardWorldPosition(x, y);
-            Vector3 spawnPosition = GetBoardWorldPosition(x, height + spawnOrder);
-            piece.transform.position = spawnPosition;
-            piece.transform.localScale = Vector3.one;
-
-            piece.Setup(data.pictureSO, data.localCell, data.sprite, x, y, false, 0f);
-            piece.SetSnapPositionOnly(targetPosition);
-            pieces[x, y] = piece;
-            piece.MoveToSnapPosition();
-            spawnOrder++;
-        }
+        EnsureGroupManager();
+        EnsureGravityManager();
+        gravityManager.Apply(pieces, columnDecks, piecePrb, boardParent, transform, width, height, pinnedPieces, groupManager);
     }
 
     HashSet<Piece> BuildGravityPinnedPieces(Piece pinnedPiece, bool keepConnectedPieces)
     {
-        HashSet<Piece> pinnedPieces = new HashSet<Piece>();
-        if (pinnedPiece != null)
-        {
-            pinnedPieces.Add(pinnedPiece);
-        }
-
-        if (!keepConnectedPieces || pieces == null)
-        {
-            return pinnedPieces;
-        }
-
-        for (int x = 0; x < pieces.GetLength(0); x++)
-        {
-            for (int y = 0; y < pieces.GetLength(1); y++)
-            {
-                Piece piece = pieces[x, y];
-                if (piece != null && !piece.IsLock && CanConnectWithNeighbor(piece))
-                {
-                    pinnedPieces.Add(piece);
-                }
-            }
-        }
-
-        return pinnedPieces;
+        EnsureGravityManager();
+        return gravityManager.BuildPinnedPieces(pieces, pinnedPiece, keepConnectedPieces);
     }
 
     List<Piece> GetConnectedPieces(List<Piece> startPieces)
     {
-        List<Piece> result = new List<Piece>();
-        if (startPieces == null || startPieces.Count == 0)
-        {
-            return result;
-        }
-
-        HashSet<Piece> visited = new HashSet<Piece>();
-        Queue<Piece> queue = new Queue<Piece>();
-
-        for (int i = 0; i < startPieces.Count; i++)
-        {
-            Piece piece = startPieces[i];
-            if (piece != null && visited.Add(piece))
-            {
-                queue.Enqueue(piece);
-            }
-        }
-
-        while (queue.Count > 0)
-        {
-            Piece piece = queue.Dequeue();
-            result.Add(piece);
-
-            AddConnectedNeighbor(piece, Vector2Int.up, visited, queue);
-            AddConnectedNeighbor(piece, Vector2Int.right, visited, queue);
-            AddConnectedNeighbor(piece, Vector2Int.down, visited, queue);
-            AddConnectedNeighbor(piece, Vector2Int.left, visited, queue);
-        }
-
-        return result;
-    }
-
-    void AddConnectedNeighbor(Piece piece, Vector2Int direction, HashSet<Piece> visited, Queue<Piece> queue)
-    {
-        Vector2Int neighborCell = piece.posInBoard + direction;
-        if (!IsInBoard(neighborCell))
-        {
-            return;
-        }
-
-        Piece neighbor = pieces[neighborCell.x, neighborCell.y];
-        if (neighbor == null || visited.Contains(neighbor) || !CanGroup(piece, neighbor))
-        {
-            return;
-        }
-
-        visited.Add(neighbor);
-        queue.Enqueue(neighbor);
+        EnsureGravityManager();
+        return gravityManager.GetConnectedPieces(pieces, startPieces);
     }
 
     bool CanConnectWithNeighbor(Piece piece)
     {
-        return CanConnectWithNeighbor(piece, Vector2Int.up)
-            || CanConnectWithNeighbor(piece, Vector2Int.right)
-            || CanConnectWithNeighbor(piece, Vector2Int.down)
-            || CanConnectWithNeighbor(piece, Vector2Int.left);
-    }
-
-    bool CanConnectWithNeighbor(Piece piece, Vector2Int direction)
-    {
-        if (piece == null)
-        {
-            return false;
-        }
-
-        Vector2Int neighborCell = piece.posInBoard + direction;
-        if (!IsInBoard(neighborCell))
-        {
-            return false;
-        }
-
-        Piece neighbor = pieces[neighborCell.x, neighborCell.y];
-        return neighbor != null && CanGroup(piece, neighbor);
-    }
-
-    void FillColumnFromDeck(int x, int startY)
-    {
-        if (columnDecks == null || x < 0 || x >= columnDecks.Length || columnDecks[x] == null)
-        {
-            return;
-        }
-
-        int spawnOrder = 0;
-        for (int y = startY; y < height; y++)
-        {
-            if (columnDecks[x].Count == 0)
-            {
-                break;
-            }
-
-            SpawnPieceData data = columnDecks[x].Dequeue();
-            Piece piece = SimplePool.Spawn<Piece>(piecePrb);
-            if (boardParent != null)
-            {
-                piece.transform.SetParent(boardParent, false);
-            }
-
-            Vector3 targetPosition = GetBoardWorldPosition(x, y);
-            Vector3 spawnPosition = GetBoardWorldPosition(x, height + spawnOrder);
-            piece.transform.position = spawnPosition;
-            piece.transform.localScale = Vector3.one;
-
-            piece.Setup(data.pictureSO, data.localCell, data.sprite, x, y, false, 0f);
-            piece.SetSnapPositionOnly(targetPosition);
-            pieces[x, y] = piece;
-            piece.MoveToSnapPosition();
-            spawnOrder++;
-        }
-    }
-
-    List<Piece> BuildGroup(Piece startPiece, HashSet<Piece> visited)
-    {
-        List<Piece> groupPieces = new List<Piece>();
-        Queue<Piece> queue = new Queue<Piece>();
-
-        visited.Add(startPiece);
-        queue.Enqueue(startPiece);
-
-        while (queue.Count > 0)
-        {
-            Piece piece = queue.Dequeue();
-            groupPieces.Add(piece);
-
-            TryAddNeighbor(piece, Vector2Int.up, visited, queue);
-            TryAddNeighbor(piece, Vector2Int.right, visited, queue);
-            TryAddNeighbor(piece, Vector2Int.down, visited, queue);
-            TryAddNeighbor(piece, Vector2Int.left, visited, queue);
-        }
-
-        return groupPieces;
-    }
-
-    void TryAddNeighbor(Piece piece, Vector2Int direction, HashSet<Piece> visited, Queue<Piece> queue)
-    {
-        Vector2Int neighborCell = piece.posInBoard + direction;
-        if (!IsInBoard(neighborCell))
-        {
-            return;
-        }
-
-        Piece neighbor = pieces[neighborCell.x, neighborCell.y];
-        if (neighbor == null || visited.Contains(neighbor) || !CanGroup(piece, neighbor))
-        {
-            return;
-        }
-
-        visited.Add(neighbor);
-        queue.Enqueue(neighbor);
+        EnsureGravityManager();
+        return gravityManager.CanConnectWithNeighbor(pieces, piece);
     }
 
     bool CanGroup(Piece a, Piece b)
     {
-        if (a == null || b == null || a.IsLock || b.IsLock || a.pictureSO != b.pictureSO)
-        {
-            return false;
-        }
-
-        if (IsLockedRow(a.posInBoard) || IsLockedRow(b.posInBoard))
-        {
-            return false;
-        }
-
-        Vector2Int boardDelta = b.posInBoard - a.posInBoard;
-        Vector2Int localDelta = b.localCell - a.localCell;
-        return boardDelta == localDelta && Mathf.Abs(boardDelta.x) + Mathf.Abs(boardDelta.y) == 1;
-    }
-
-    void CreateGroup(List<Piece> groupPieces, List<HashSet<string>> oldGroupSets)
-    {
-        Vector3 center = Vector3.zero;
-        for (int i = 0; i < groupPieces.Count; i++)
-        {
-            groupPieces[i].ForceToSnapPosition();
-            center += groupPieces[i].transform.position;
-        }
-
-        center /= groupPieces.Count;
-
-        PieceGroup group = SimplePool.Spawn<PieceGroup>(pieceGroupPrb);
-        group.transform.position = center;
-        group.transform.rotation = Quaternion.identity;
-        group.transform.localScale = Vector3.one;
-        group.Setup(groupPieces);
-        activeGroups.Add(group);
-
-        for (int i = 0; i < groupPieces.Count; i++)
-        {
-            groupPieces[i].transform.SetParent(group.transform, true);
-        }
-
-        if (!IsCompletedGroup(group) && ShouldScaleNewGroup(groupPieces, oldGroupSets))
-        {
-            PlayGroupMergeScaleWhenStable(group);
-        }
-
-    }
-
-    void UpdateAllPieceBorders()
-    {
-        if (pieces == null)
-        {
-            return;
-        }
-
-        for (int x = 0; x < pieces.GetLength(0); x++)
-        {
-            for (int y = 0; y < pieces.GetLength(1); y++)
-            {
-                if (pieces[x, y] != null)
-                {
-                    UpdatePieceBorders(pieces[x, y]);
-                }
-            }
-        }
-    }
-
-    void UpdatePieceBorders(Piece piece)
-    {
-        SetBorderByNeighbor(piece, Vector2Int.up);
-        SetBorderByNeighbor(piece, Vector2Int.right);
-        SetBorderByNeighbor(piece, Vector2Int.down);
-        SetBorderByNeighbor(piece, Vector2Int.left);
-    }
-
-    void SetBorderByNeighbor(Piece piece, Vector2Int direction)
-    {
-        Vector2Int neighborCell = piece.posInBoard + direction;
-        if (!IsInBoard(neighborCell))
-        {
-            piece.SetBorderVisible(direction, true);
-            return;
-        }
-
-        Piece neighbor = pieces[neighborCell.x, neighborCell.y];
-        bool shouldHide = neighbor != null && CanGroup(piece, neighbor);
-        piece.SetBorderVisible(direction, !shouldHide);
-    }
-
-    List<HashSet<string>> GetActiveGroupIdSets()
-    {
-        List<HashSet<string>> sets = new List<HashSet<string>>();
-        for (int i = 0; i < activeGroups.Count; i++)
-        {
-            PieceGroup group = activeGroups[i];
-            if (group != null && group.pieces.Count >= 2)
-            {
-                sets.Add(BuildGroupIdSet(group.pieces));
-            }
-        }
-
-        return sets;
-    }
-
-    HashSet<string> BuildGroupIdSet(List<Piece> groupPieces)
-    {
-        HashSet<string> ids = new HashSet<string>();
-        for (int i = 0; i < groupPieces.Count; i++)
-        {
-            Piece piece = groupPieces[i];
-            if (piece != null)
-            {
-                ids.Add(piece.pictureId + "_" + piece.localCell.x + "_" + piece.localCell.y);
-            }
-        }
-
-        return ids;
-    }
-
-    bool ShouldScaleNewGroup(List<Piece> groupPieces, List<HashSet<string>> oldGroupSets)
-    {
-        HashSet<string> newSet = BuildGroupIdSet(groupPieces);
-        int bestOldOverlap = 0;
-
-        for (int i = 0; i < oldGroupSets.Count; i++)
-        {
-            if (newSet.SetEquals(oldGroupSets[i]))
-            {
-                return false;
-            }
-
-            int overlap = 0;
-            foreach (string id in newSet)
-            {
-                if (oldGroupSets[i].Contains(id))
-                {
-                    overlap++;
-                }
-            }
-
-            if (overlap > bestOldOverlap)
-            {
-                bestOldOverlap = overlap;
-            }
-        }
-
-        return newSet.Count > bestOldOverlap;
-    }
-
-    void PlayGroupMergeScale(PieceGroup group)
-    {
-        group.transform.DOKill();
-        Vector3 startPosition = group.transform.position;
-        Vector3 startScale = group.transform.localScale;
-
-        group.transform.DOScale(startScale * 1.06f, 0.08f)
-            .SetEase(Ease.OutQuad)
-            .SetLoops(2, LoopType.Yoyo)
-            .OnComplete(() =>
-            {
-                group.transform.position = startPosition;
-                group.transform.localScale = startScale;
-            });
-    }
-
-    void PlayGroupMergeScaleWhenStable(PieceGroup group)
-    {
-        DOVirtual.DelayedCall(0.02f, () =>
-        {
-            if (group != null && activeGroups.Contains(group) && !IsCompletedGroup(group))
-            {
-                PlayGroupMergeScale(group);
-            }
-        });
+        EnsureGroupManager();
+        return groupManager.CanGroup(a, b);
     }
 
     bool IsInBoard(Vector2Int cell)
@@ -1918,6 +1265,71 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         );
 
         return boardParent != null ? boardParent.TransformPoint(localPosition) : localPosition;
+    }
+
+    public void BoosterHint()
+    {
+        Piece pieceA = null, pieceB = null;
+
+        List<Piece> boardPieces = new List<Piece>();
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                Piece piece = pieces[x, y];
+                if (piece == null)
+                    continue;
+
+                if (piece.IsLock)
+                    continue;
+
+                if (IsLockedRow(piece.posInBoard))
+                    continue;
+
+                boardPieces.Add(piece);
+            }
+        }
+
+        for (int i = 0; i < boardPieces.Count; i++)
+        {
+            for (int j = i + 1; j < boardPieces.Count; j++)
+            {
+                Piece a = boardPieces[i];
+                Piece b = boardPieces[j];
+
+                if (a.pictureSO != b.pictureSO)
+                    continue;
+
+                Vector2Int localDelta = b.localCell - a.localCell;
+
+                bool isNeighborInOriginal =
+                    Mathf.Abs(localDelta.x) + Mathf.Abs(localDelta.y) == 1;
+
+                if (!isNeighborInOriginal)
+                    continue;
+
+                Vector2Int boardDelta = b.posInBoard - a.posInBoard;
+
+                bool alreadyCorrect =
+                    boardDelta == localDelta;
+
+                if (alreadyCorrect)
+                    continue;
+
+                pieceA = a;
+                pieceB = b;
+            }
+        }
+
+        if (pieceA != null && pieceB != null)
+        {
+            int orgOd = pieceA.spriteRenderer.sortingOrder;
+            pieceA.SetOrderOffset(orgOd + 7);
+            pieceB.SetOrderOffset(orgOd + 7);
+            pieceA.transform.DOScale(Vector3.one * 1.2f, 0.3f).SetLoops(2, LoopType.Yoyo).OnComplete(() => pieceA.SetOrderOffset(orgOd));
+            pieceB.transform.DOScale(Vector3.one * 1.2f, 0.3f).SetLoops(2, LoopType.Yoyo).OnComplete(() => pieceB.SetOrderOffset(orgOd));
+        }
     }
 
     public bool IsWin()
