@@ -214,6 +214,7 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
         KillFlip();
         _col.enabled = false;
         transform.localScale = defaultPieceScale;
+        ResetBordersImmediate();
 
         float halfDuration = flipDuration * 0.5f;
         Vector3 closedScale = new Vector3(defaultPieceScale.x, 0f, defaultPieceScale.z);
