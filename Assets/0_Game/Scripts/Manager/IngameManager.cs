@@ -18,15 +18,17 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     const float CompleteFlashDuration = 0.08f;
 
     public Piece[,] pieces;
-    Queue<SpawnPieceData>[] columnDecks;
+    internal Queue<SpawnPieceData>[] columnDecks;
+    PuzzleBoardSpawner boardSpawner;
+    PuzzleMoveManager moveManager;
     PuzzleGroupManager groupManager;
     PuzzleGravityManager gravityManager;
-    Transform boardParent;
+    internal Transform boardParent;
     Tween rebuildTween;
     Tween showHandTutTween;
     bool isResolvingComplete;
 
-    public bool IsInputLocked { get; private set; }
+    public bool IsInputLocked { get; internal set; }
 
     public struct SpawnPieceData
     {
@@ -50,6 +52,14 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         }
     }
 
+    void EnsureBoardSpawner()
+    {
+        if (boardSpawner == null)
+        {
+            boardSpawner = new PuzzleBoardSpawner();
+        }
+    }
+
     void EnsureGravityManager()
     {
         if (gravityManager == null)
@@ -60,88 +70,19 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     public void BuildBoard()
     {
-        ResolveCurrentLevel();
-
-        if (curLevel == null || piecePrb == null)
-        {
-            Debug.LogError("Missing level or piece prefab.");
-            return;
-        }
-
-        pieces = new Piece[curLevel.boardSize.x, curLevel.boardSize.y];
-        width = curLevel.boardSize.x;
-        height = curLevel.boardSize.y;
-
-        List<SpawnPieceData> spawnPieces = BuildSpawnPieces();
-        if (spawnPieces.Count == 0)
-        {
-            Debug.LogError("Level has no valid picture pieces.");
-            return;
-        }
-
-        if (curLevel.shufflePieces)
-        {
-            Shuffle(spawnPieces);
-        }
-
-        SortSpawnPiecesByPictureSize(spawnPieces);
-
-        if (curLevel.isTutorialLevel)
-        {
-            TutorialLevelArranger.Apply(curLevel, spawnPieces, width, height);
-        }
-
-        Vector2 pieceSize = GetPieceSize(piecePrb);
-        Vector2 boardOffset = new Vector2(
-            (width - 1) * pieceSize.x * 0.5f,
-            (height - 1) * pieceSize.y * 0.5f
-        );
-
-        int spawnCount = GetSpawnCount(spawnPieces.Count);
-        if (!curLevel.isTutorialLevel)
-        {
-            EnsureOneCompletePictureInBoard(spawnPieces, spawnCount);
-        }
-        BuildColumnDecks(spawnPieces, spawnCount);
-        int spawnIndex = 0;
-
-        for (int y = 0; y < height; y++)
-        {
-            for (int x = 0; x < width; x++)
-            {
-                if (spawnIndex >= spawnCount)
-                {
-                    FinishInitialBoard(spawnCount);
-                    return;
-                }
-
-                Piece piece = SimplePool.Spawn<Piece>(piecePrb);
-                if (boardParent == null)
-                {
-                    boardParent = piece.transform.parent;
-                }
-
-                piece.transform.localPosition = new Vector3(
-                    x * pieceSize.x - boardOffset.x,
-                    y * pieceSize.y - boardOffset.y,
-                    0
-                );
-
-                SpawnPieceData data = spawnPieces[spawnIndex];
-                float delay = spawnIndex * flipDelayEachPiece;
-                piece.Setup(data.pictureSO, data.localCell, data.sprite, x, y, playSpawnFlip, delay);
-                ApplyInitialLock(piece, x, y, playSpawnFlip ? delay + piece.flipDuration : 0f);
-                piece.SetSnapPosition(piece.transform.position);
-
-                pieces[x, y] = piece;
-                spawnIndex++;
-            }
-        }
-
-        FinishInitialBoard(spawnCount);
+        EnsureBoardSpawner();
+        boardSpawner.BuildBoard(this);
     }
 
-    void FinishInitialBoard(int spawnedPieceCount)
+    void EnsureMoveManager()
+    {
+        if (moveManager == null)
+        {
+            moveManager = new PuzzleMoveManager();
+        }
+    }
+
+    internal void FinishInitialBoard(int spawnedPieceCount)
     {
         PrepareInitialBoardGroups();
         ScheduleShowHandTutAfterSpawnFlip(spawnedPieceCount);
@@ -190,165 +131,6 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         });
     }
 
-    void ResolveCurrentLevel()
-    {
-        if (GameManager.ins == null || GameManager.ins.levels == null || GameManager.ins.levels.Count == 0)
-        {
-            return;
-        }
-
-        int levelIndex = GetCurrentLevelIndex();
-        curLevel = GameManager.ins.levels[levelIndex % GameManager.ins.levels.Count];
-    }
-
-    int GetSpawnCount(int availablePieceCount)
-    {
-        int boardCapacity = width * height;
-        return Mathf.Min(boardCapacity, availablePieceCount);
-    }
-
-    void ApplyInitialLock(Piece piece, int x, int y, float showDelay)
-    {
-        if (piece == null || curLevel == null || !curLevel.hasLockPieces || curLevel.lockPieces == null)
-        {
-            return;
-        }
-
-        for (int i = 0; i < curLevel.lockPieces.Count; i++)
-        {
-            LevelLockPieceData lockData = curLevel.lockPieces[i];
-            if (lockData != null && lockData.cell == new Vector2Int(x, y))
-            {
-                piece.SetLock(lockData.unlockImageCount, showDelay);
-                return;
-            }
-        }
-    }
-
-    List<SpawnPieceData> BuildSpawnPieces()
-    {
-        return RuntimePictureBuilder.BuildSpawnPieces(curLevel, piecePrb);
-    }
-
-    int GetCurrentLevelIndex()
-    {
-        if (DataManager.ins == null || DataManager.ins.dt == null)
-        {
-            return 0;
-        }
-
-        return Mathf.Max(0, DataManager.ins.dt.level);
-    }
-
-    void BuildColumnDecks(List<SpawnPieceData> spawnPieces, int startIndex)
-    {
-        columnDecks = new Queue<SpawnPieceData>[width];
-        for (int x = 0; x < width; x++)
-        {
-            columnDecks[x] = new Queue<SpawnPieceData>();
-        }
-
-        for (int i = startIndex; i < spawnPieces.Count; i++)
-        {
-            int column = (i - startIndex) % width;
-            columnDecks[column].Enqueue(spawnPieces[i]);
-        }
-    }
-
-    void Shuffle<T>(List<T> list)
-    {
-        for (int i = list.Count - 1; i > 0; i--)
-        {
-            int randomIndex = Random.Range(0, i + 1);
-            T temp = list[i];
-            list[i] = list[randomIndex];
-            list[randomIndex] = temp;
-        }
-    }
-
-    void SortSpawnPiecesByPictureSize(List<SpawnPieceData> spawnPieces)
-    {
-        spawnPieces.Sort((a, b) =>
-        {
-            int aCount = GetPicturePieceCount(a.pictureSO);
-            int bCount = GetPicturePieceCount(b.pictureSO);
-            return aCount.CompareTo(bCount);
-        });
-    }
-
-    int GetPicturePieceCount(PictureSO picture)
-    {
-        if (picture == null)
-        {
-            return int.MaxValue;
-        }
-
-        int sizeCount = picture.size.x * picture.size.y;
-        return sizeCount > 0 ? sizeCount : picture.pieces.Count;
-    }
-
-    void EnsureOneCompletePictureInBoard(List<SpawnPieceData> spawnPieces, int boardPieceCount)
-    {
-        PictureSO selectedPicture = FindCompletePictureForBoard(spawnPieces, boardPieceCount);
-        if (selectedPicture == null)
-        {
-            return;
-        }
-
-        List<SpawnPieceData> selectedPieces = new List<SpawnPieceData>();
-        List<SpawnPieceData> otherPieces = new List<SpawnPieceData>();
-
-        for (int i = 0; i < spawnPieces.Count; i++)
-        {
-            if (spawnPieces[i].pictureSO == selectedPicture)
-            {
-                selectedPieces.Add(spawnPieces[i]);
-            }
-            else
-            {
-                otherPieces.Add(spawnPieces[i]);
-            }
-        }
-
-        spawnPieces.Clear();
-        spawnPieces.AddRange(selectedPieces);
-        spawnPieces.AddRange(otherPieces);
-    }
-
-    PictureSO FindCompletePictureForBoard(List<SpawnPieceData> spawnPieces, int boardPieceCount)
-    {
-        for (int i = 0; i < spawnPieces.Count; i++)
-        {
-            PictureSO picture = spawnPieces[i].pictureSO;
-            if (picture == null)
-            {
-                continue;
-            }
-
-            int pieceCount = GetPicturePieceCount(picture);
-            if (pieceCount <= boardPieceCount && CountPiecesOfPicture(spawnPieces, picture) >= pieceCount)
-            {
-                return picture;
-            }
-        }
-
-        return null;
-    }
-
-    int CountPiecesOfPicture(List<SpawnPieceData> spawnPieces, PictureSO picture)
-    {
-        int count = 0;
-        for (int i = 0; i < spawnPieces.Count; i++)
-        {
-            if (spawnPieces[i].pictureSO == picture)
-            {
-                count++;
-            }
-        }
-
-        return count;
-    }
-
     public Piece GetNearestPiece(Vector3 position, Piece ignorePiece)
     {
         return GetNearestPiece(position, ignorePiece, null);
@@ -356,484 +138,50 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     public Piece GetNearestPiece(Vector3 position, Piece ignorePiece, PieceGroup ignoreGroup)
     {
-        if (pieces == null)
-        {
-            return null;
-        }
-
-        Piece nearestPiece = null;
-        float nearestDistance = GetPieceSize(piecePrb).magnitude * 0.5f;
-
-        for (int x = 0; x < pieces.GetLength(0); x++)
-        {
-            for (int y = 0; y < pieces.GetLength(1); y++)
-            {
-                Piece piece = pieces[x, y];
-                if (piece == null || piece == ignorePiece || (ignoreGroup != null && ignoreGroup.Contains(piece)))
-                {
-                    continue;
-                }
-
-                float distance = Vector3.Distance(position, piece.GetSnapPosition());
-                if (distance <= nearestDistance)
-                {
-                    nearestDistance = distance;
-                    nearestPiece = piece;
-                }
-            }
-        }
-
-        return nearestPiece;
+        EnsureMoveManager();
+        return moveManager.GetNearestPiece(this, position, ignorePiece, ignoreGroup);
     }
 
     public bool GetNearestCell(Vector3 position, Piece ignorePiece, PieceGroup ignoreGroup, out Vector2Int nearestCell)
     {
-        nearestCell = Vector2Int.zero;
-        if (pieces == null)
-        {
-            return false;
-        }
-
-        bool foundCell = false;
-        float nearestDistance = GetPieceSize(piecePrb).magnitude * 0.5f;
-
-        for (int x = 0; x < pieces.GetLength(0); x++)
-        {
-            for (int y = 0; y < pieces.GetLength(1); y++)
-            {
-                Piece piece = pieces[x, y];
-                if (piece == ignorePiece
-                    || (piece != null && piece.IsLock)
-                    || (ignoreGroup != null && piece != null && ignoreGroup.Contains(piece)))
-                {
-                    continue;
-                }
-
-                float distance = Vector3.Distance(position, GetBoardWorldPosition(x, y));
-                if (distance <= nearestDistance)
-                {
-                    nearestDistance = distance;
-                    nearestCell = new Vector2Int(x, y);
-                    foundCell = true;
-                }
-            }
-        }
-
-        return foundCell;
+        EnsureMoveManager();
+        return moveManager.GetNearestCell(this, position, ignorePiece, ignoreGroup, out nearestCell);
     }
 
     public bool GetNearestCellForGroup(PieceGroup group, Piece grabbedPiece, out Vector2Int targetCell)
     {
-        targetCell = Vector2Int.zero;
-        if (pieces == null || group == null || grabbedPiece == null)
-        {
-            return false;
-        }
-
-        bool foundCell = false;
-        float nearestDistance = GetPieceSize(piecePrb).magnitude * 0.5f;
-        float bestScore = float.MinValue;
-
-        for (int i = 0; i < group.pieces.Count; i++)
-        {
-            Piece groupPiece = group.pieces[i];
-            if (groupPiece == null)
-            {
-                continue;
-            }
-
-            for (int x = 0; x < pieces.GetLength(0); x++)
-            {
-                for (int y = 0; y < pieces.GetLength(1); y++)
-                {
-                    float distance = Vector3.Distance(groupPiece.transform.position, GetBoardWorldPosition(x, y));
-                    if (distance > nearestDistance)
-                    {
-                        continue;
-                    }
-
-                    Vector2Int offset = new Vector2Int(x, y) - groupPiece.posInBoard;
-                    if (offset == Vector2Int.zero || !IsValidGroupMoveOffset(group, offset))
-                    {
-                        continue;
-                    }
-
-                    int connectionCount = CountGroupOutsideConnections(group, offset);
-                    float score = connectionCount * 100f - distance;
-                    if (score > bestScore)
-                    {
-                        bestScore = score;
-                        targetCell = grabbedPiece.posInBoard + offset;
-                        foundCell = true;
-                    }
-                }
-            }
-        }
-
-        return foundCell;
-    }
-
-    bool IsValidGroupMoveOffset(PieceGroup group, Vector2Int offset)
-    {
-        List<Vector2Int> oldCells = new List<Vector2Int>();
-        List<Vector2Int> newCells = new List<Vector2Int>();
-        int swapPieceCount = 0;
-        int swapToCellCount = 0;
-
-        for (int i = 0; i < group.pieces.Count; i++)
-        {
-            Piece piece = group.pieces[i];
-            if (piece == null)
-            {
-                return false;
-            }
-
-            Vector2Int oldCell = piece.posInBoard;
-            Vector2Int newCell = oldCell + offset;
-            if (!IsInBoard(newCell) || IsLockedRow(newCell))
-            {
-                return false;
-            }
-
-            oldCells.Add(oldCell);
-            newCells.Add(newCell);
-        }
-
-        for (int i = 0; i < newCells.Count; i++)
-        {
-            Piece targetPiece = pieces[newCells[i].x, newCells[i].y];
-            if (targetPiece != null && targetPiece.IsLock)
-            {
-                return false;
-            }
-
-            if (targetPiece != null && !group.Contains(targetPiece))
-            {
-                swapPieceCount++;
-            }
-        }
-
-        for (int i = 0; i < oldCells.Count; i++)
-        {
-            if (!newCells.Contains(oldCells[i]))
-            {
-                swapToCellCount++;
-            }
-        }
-
-        return swapPieceCount <= swapToCellCount;
-    }
-
-    int CountGroupOutsideConnections(PieceGroup group, Vector2Int offset)
-    {
-        int count = 0;
-        List<Vector2Int> newCells = new List<Vector2Int>();
-
-        for (int i = 0; i < group.pieces.Count; i++)
-        {
-            if (group.pieces[i] != null)
-            {
-                newCells.Add(group.pieces[i].posInBoard + offset);
-            }
-        }
-
-        for (int i = 0; i < group.pieces.Count; i++)
-        {
-            Piece piece = group.pieces[i];
-            if (piece == null)
-            {
-                continue;
-            }
-
-            Vector2Int futureCell = piece.posInBoard + offset;
-            count += CountOutsideConnection(piece, futureCell, Vector2Int.up, group, newCells);
-            count += CountOutsideConnection(piece, futureCell, Vector2Int.right, group, newCells);
-            count += CountOutsideConnection(piece, futureCell, Vector2Int.down, group, newCells);
-            count += CountOutsideConnection(piece, futureCell, Vector2Int.left, group, newCells);
-        }
-
-        return count;
-    }
-
-    int CountOutsideConnection(Piece piece, Vector2Int futureCell, Vector2Int direction, PieceGroup group, List<Vector2Int> newCells)
-    {
-        Vector2Int neighborCell = futureCell + direction;
-        if (!IsInBoard(neighborCell)
-            || newCells.Contains(neighborCell)
-            || IsLockedRow(futureCell)
-            || IsLockedRow(neighborCell))
-        {
-            return 0;
-        }
-
-        Piece neighbor = pieces[neighborCell.x, neighborCell.y];
-        if (neighbor == null || neighbor.IsLock || group.Contains(neighbor) || piece.pictureSO != neighbor.pictureSO)
-        {
-            return 0;
-        }
-
-        Vector2Int boardDelta = neighbor.posInBoard - futureCell;
-        Vector2Int localDelta = neighbor.localCell - piece.localCell;
-        return boardDelta == localDelta && Mathf.Abs(boardDelta.x) + Mathf.Abs(boardDelta.y) == 1 ? 1 : 0;
+        EnsureMoveManager();
+        return moveManager.GetNearestCellForGroup(this, group, grabbedPiece, out targetCell);
     }
 
     public void MovePieceToCell(Piece piece, Vector2Int targetCell)
     {
-        if (IsInputLocked || piece == null || piece.IsLock || !IsInBoard(targetCell) || IsLockedRow(targetCell))
-        {
-            if (piece != null)
-            {
-                LockInputForMove();
-                piece.MoveToSnapPosition();
-            }
-
-            return;
-        }
-
-        Vector2Int oldCell = piece.posInBoard;
-        if (oldCell == targetCell)
-        {
-            LockInputForMove();
-            piece.MoveToSnapPosition();
-            return;
-        }
-
-        Piece targetPiece = pieces[targetCell.x, targetCell.y];
-        if (targetPiece != null)
-        {
-            if (targetPiece.IsLock || IsLockedRow(targetCell))
-            {
-                LockInputForMove();
-                piece.MoveToSnapPosition();
-                return;
-            }
-
-            SwapPieces(piece, targetPiece);
-            return;
-        }
-
-        IsInputLocked = true;
-        pieces[oldCell.x, oldCell.y] = null;
-        pieces[targetCell.x, targetCell.y] = piece;
-
-        piece.SetPosInBoard(targetCell.x, targetCell.y);
-        piece.SetSnapPositionOnly(GetBoardWorldPosition(targetCell.x, targetCell.y));
-        piece.MoveToSnapPosition();
-
-        if (CanConnectWithNeighbor(piece))
-        {
-            ApplyGravity(GetConnectedPieces(new List<Piece> { piece }));
-        }
-        else
-        {
-            ApplyGravityKeepingConnectedPieces();
-        }
-
-        RebuildGroupsAfterMove();
+        EnsureMoveManager();
+        moveManager.MovePieceToCell(this, piece, targetCell);
     }
 
     public void SwapPieces(Piece firstPiece, Piece secondPiece)
     {
-        if (IsInputLocked || firstPiece == null || secondPiece == null || firstPiece.IsLock || secondPiece.IsLock)
-        {
-            return;
-        }
-
-        IsInputLocked = true;
-
-        Vector2Int firstCell = firstPiece.posInBoard;
-        Vector2Int secondCell = secondPiece.posInBoard;
-
-        pieces[firstCell.x, firstCell.y] = secondPiece;
-        pieces[secondCell.x, secondCell.y] = firstPiece;
-
-        Vector3 firstSnap = firstPiece.GetSnapPosition();
-        Vector3 secondSnap = secondPiece.GetSnapPosition();
-
-        firstPiece.SetPosInBoard(secondCell.x, secondCell.y);
-        secondPiece.SetPosInBoard(firstCell.x, firstCell.y);
-
-        firstPiece.SetSnapPositionOnly(secondSnap);
-        secondPiece.SetSnapPositionOnly(firstSnap);
-
-        firstPiece.MoveToSnapPosition();
-        secondPiece.MoveToSnapPosition();
-        ApplyGravityKeepingConnectedPieces();
-
-        RebuildGroupsAfterMove();
+        EnsureMoveManager();
+        moveManager.SwapPieces(this, firstPiece, secondPiece);
     }
 
     public void SwapGroup(PieceGroup group, Piece grabbedPiece, Piece targetPiece)
     {
-        if (targetPiece == null)
-        {
-            MoveGroupBack(group);
-            return;
-        }
-
-        MoveGroupToCell(group, grabbedPiece, targetPiece.posInBoard);
+        EnsureMoveManager();
+        moveManager.SwapGroup(this, group, grabbedPiece, targetPiece);
     }
 
     public void MoveGroupToCell(PieceGroup group, Piece grabbedPiece, Vector2Int targetCell)
     {
-        if (IsInputLocked)
-        {
-            return;
-        }
-
-        if (group == null || grabbedPiece == null || GroupHasLockedPiece(group) || !IsInBoard(targetCell) || IsLockedRow(targetCell))
-        {
-            MoveGroupBack(group);
-            return;
-        }
-
-        Vector2Int offset = targetCell - grabbedPiece.posInBoard;
-        if (offset == Vector2Int.zero)
-        {
-            MoveGroupBack(group);
-            return;
-        }
-
-        List<Piece> groupPieces = new List<Piece>(group.pieces);
-        List<Vector2Int> oldCells = new List<Vector2Int>(groupPieces.Count);
-        List<Vector2Int> newCells = new List<Vector2Int>(groupPieces.Count);
-        List<Piece> swapPieces = new List<Piece>();
-        List<Vector2Int> swapToCells = new List<Vector2Int>();
-        bool hasEmptyTargetCell = false;
-
-        for (int i = 0; i < groupPieces.Count; i++)
-        {
-            Piece piece = groupPieces[i];
-            if (piece == null)
-            {
-                MoveGroupBack(group);
-                return;
-            }
-
-            Vector2Int oldCell = piece.posInBoard;
-            Vector2Int newCell = oldCell + offset;
-            if (!IsInBoard(newCell) || IsLockedRow(newCell))
-            {
-                MoveGroupBack(group);
-                return;
-            }
-
-            oldCells.Add(oldCell);
-            newCells.Add(newCell);
-        }
-
-        for (int i = 0; i < newCells.Count; i++)
-        {
-            Piece swapPiece = pieces[newCells[i].x, newCells[i].y];
-            if (swapPiece == null)
-            {
-                hasEmptyTargetCell = true;
-            }
-            else if (!group.Contains(swapPiece))
-            {
-                if (swapPiece.IsLock || IsLockedRow(newCells[i]))
-                {
-                    MoveGroupBack(group);
-                    return;
-                }
-
-                swapPieces.Add(swapPiece);
-            }
-        }
-
-        for (int i = 0; i < oldCells.Count; i++)
-        {
-            if (!newCells.Contains(oldCells[i]))
-            {
-                swapToCells.Add(oldCells[i]);
-            }
-        }
-
-        if (swapPieces.Count > swapToCells.Count)
-        {
-            MoveGroupBack(group);
-            return;
-        }
-
-        IsInputLocked = true;
-
-        for (int i = 0; i < oldCells.Count; i++)
-        {
-            pieces[oldCells[i].x, oldCells[i].y] = null;
-        }
-
-        for (int i = 0; i < groupPieces.Count; i++)
-        {
-            Piece groupPiece = groupPieces[i];
-            Vector2Int newCell = newCells[i];
-
-            pieces[newCell.x, newCell.y] = groupPiece;
-            groupPiece.SetPosInBoard(newCell.x, newCell.y);
-            groupPiece.SetSnapPositionOnly(GetBoardWorldPosition(newCell.x, newCell.y));
-        }
-
-        for (int i = 0; i < swapPieces.Count; i++)
-        {
-            Piece swapPiece = swapPieces[i];
-            Vector2Int swapToCell = swapToCells[i];
-
-            pieces[swapToCell.x, swapToCell.y] = swapPiece;
-            swapPiece.SetPosInBoard(swapToCell.x, swapToCell.y);
-            swapPiece.SetSnapPositionOnly(GetBoardWorldPosition(swapToCell.x, swapToCell.y));
-        }
-
-        for (int i = 0; i < groupPieces.Count; i++)
-        {
-            groupPieces[i].MoveToSnapPosition();
-        }
-
-        for (int i = 0; i < swapPieces.Count; i++)
-        {
-            swapPieces[i].MoveToSnapPosition();
-        }
-
-        if (hasEmptyTargetCell)
-        {
-            ApplyGravityKeepingConnectedPieces();
-        }
-
-        RebuildGroupsAfterMove();
-    }
-
-    bool GroupHasLockedPiece(PieceGroup group)
-    {
-        if (group == null)
-        {
-            return false;
-        }
-
-        for (int i = 0; i < group.pieces.Count; i++)
-        {
-            if (group.pieces[i] != null && group.pieces[i].IsLock)
-            {
-                return true;
-            }
-        }
-
-        return false;
+        EnsureMoveManager();
+        moveManager.MoveGroupToCell(this, group, grabbedPiece, targetCell);
     }
 
     void MoveGroupBack(PieceGroup group)
     {
-        if (group == null)
-        {
-            return;
-        }
-
-        LockInputForMove();
-
-        for (int i = 0; i < group.pieces.Count; i++)
-        {
-            if (group.pieces[i] != null)
-            {
-                group.pieces[i].MoveToSnapPosition();
-            }
-        }
+        EnsureMoveManager();
+        moveManager.MoveGroupBack(this, group);
     }
 
     void RebuildGroups()
@@ -847,7 +195,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         groupManager.Rebuild(pieces, pieceGroupPrb, boardParent, transform, checkCompleted, CheckCompletedGroups);
     }
 
-    void RebuildGroupsAfterMove()
+    internal void RebuildGroupsAfterMove()
     {
         if (rebuildTween != null)
         {
@@ -1156,7 +504,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         ApplyGravity((Piece)null, false);
     }
 
-    void ApplyGravity(List<Piece> pinnedPieces)
+    internal void ApplyGravity(List<Piece> pinnedPieces)
     {
         HashSet<Piece> pinnedSet = new HashSet<Piece>();
         if (pinnedPieces != null)
@@ -1173,7 +521,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         ApplyGravity(pinnedSet);
     }
 
-    void ApplyGravityKeepingConnectedPieces()
+    internal void ApplyGravityKeepingConnectedPieces()
     {
         ApplyGravity((Piece)null, true);
     }
@@ -1197,25 +545,25 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         return gravityManager.BuildPinnedPieces(pieces, pinnedPiece, keepConnectedPieces);
     }
 
-    List<Piece> GetConnectedPieces(List<Piece> startPieces)
+    internal List<Piece> GetConnectedPieces(List<Piece> startPieces)
     {
         EnsureGravityManager();
         return gravityManager.GetConnectedPieces(pieces, startPieces);
     }
 
-    bool CanConnectWithNeighbor(Piece piece)
+    internal bool CanConnectWithNeighbor(Piece piece)
     {
         EnsureGravityManager();
         return gravityManager.CanConnectWithNeighbor(pieces, piece);
     }
 
-    bool CanGroup(Piece a, Piece b)
+    internal bool CanGroup(Piece a, Piece b)
     {
         EnsureGroupManager();
         return groupManager.CanGroup(a, b);
     }
 
-    bool IsInBoard(Vector2Int cell)
+    internal bool IsInBoard(Vector2Int cell)
     {
         return pieces != null
             && cell.x >= 0
@@ -1233,7 +581,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             && cell.y >= height - lockedTopRows;
     }
 
-    Vector2 GetPieceSize(Piece piece)
+    internal Vector2 GetPieceSize(Piece piece)
     {
         if (piece == null || piece.spriteRenderer == null || piece.spriteRenderer.sprite == null)
         {
@@ -1250,7 +598,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         );
     }
 
-    Vector3 GetBoardWorldPosition(int x, int y)
+    internal Vector3 GetBoardWorldPosition(int x, int y)
     {
         Vector2 pieceSize = GetPieceSize(piecePrb);
         Vector2 boardOffset = new Vector2(
