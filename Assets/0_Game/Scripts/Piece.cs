@@ -263,7 +263,19 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
         ResetPointerDownOrder();
 
         Vector2Int targetCell;
-        if (IngameManager.ins != null && IngameManager.ins.GetNearestCell(transform.position, this, dragGroup, out targetCell))
+        bool hasTarget = false;
+        if (IngameManager.ins != null)
+        {
+            hasTarget = dragGroup != null
+                ? IngameManager.ins.GetNearestCellForGroup(dragGroup, this, out targetCell)
+                : IngameManager.ins.GetNearestCell(transform.position, this, dragGroup, out targetCell);
+        }
+        else
+        {
+            targetCell = Vector2Int.zero;
+        }
+
+        if (hasTarget)
         {
             if (dragGroup != null)
             {

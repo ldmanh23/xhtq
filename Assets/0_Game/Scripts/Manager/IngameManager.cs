@@ -510,6 +510,156 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         return foundCell;
     }
 
+    public bool GetNearestCellForGroup(PieceGroup group, Piece grabbedPiece, out Vector2Int targetCell)
+    {
+        targetCell = Vector2Int.zero;
+        if (pieces == null || group == null || grabbedPiece == null)
+        {
+            return false;
+        }
+
+        bool foundCell = false;
+        float nearestDistance = GetPieceSize(piecePrb).magnitude * 0.5f;
+        float bestScore = float.MinValue;
+
+        for (int i = 0; i < group.pieces.Count; i++)
+        {
+            Piece groupPiece = group.pieces[i];
+            if (groupPiece == null)
+            {
+                continue;
+            }
+
+            for (int x = 0; x < pieces.GetLength(0); x++)
+            {
+                for (int y = 0; y < pieces.GetLength(1); y++)
+                {
+                    float distance = Vector3.Distance(groupPiece.transform.position, GetBoardWorldPosition(x, y));
+                    if (distance > nearestDistance)
+                    {
+                        continue;
+                    }
+
+                    Vector2Int offset = new Vector2Int(x, y) - groupPiece.posInBoard;
+                    if (offset == Vector2Int.zero || !IsValidGroupMoveOffset(group, offset))
+                    {
+                        continue;
+                    }
+
+                    int connectionCount = CountGroupOutsideConnections(group, offset);
+                    float score = connectionCount * 100f - distance;
+                    if (score > bestScore)
+                    {
+                        bestScore = score;
+                        targetCell = grabbedPiece.posInBoard + offset;
+                        foundCell = true;
+                    }
+                }
+            }
+        }
+
+        return foundCell;
+    }
+
+    bool IsValidGroupMoveOffset(PieceGroup group, Vector2Int offset)
+    {
+        List<Vector2Int> oldCells = new List<Vector2Int>();
+        List<Vector2Int> newCells = new List<Vector2Int>();
+        int swapPieceCount = 0;
+        int swapToCellCount = 0;
+
+        for (int i = 0; i < group.pieces.Count; i++)
+        {
+            Piece piece = group.pieces[i];
+            if (piece == null)
+            {
+                return false;
+            }
+
+            Vector2Int oldCell = piece.posInBoard;
+            Vector2Int newCell = oldCell + offset;
+            if (!IsInBoard(newCell) || IsLockedRow(newCell))
+            {
+                return false;
+            }
+
+            oldCells.Add(oldCell);
+            newCells.Add(newCell);
+        }
+
+        for (int i = 0; i < newCells.Count; i++)
+        {
+            Piece targetPiece = pieces[newCells[i].x, newCells[i].y];
+            if (targetPiece != null && !group.Contains(targetPiece))
+            {
+                swapPieceCount++;
+            }
+        }
+
+        for (int i = 0; i < oldCells.Count; i++)
+        {
+            if (!newCells.Contains(oldCells[i]))
+            {
+                swapToCellCount++;
+            }
+        }
+
+        return swapPieceCount <= swapToCellCount;
+    }
+
+    int CountGroupOutsideConnections(PieceGroup group, Vector2Int offset)
+    {
+        int count = 0;
+        List<Vector2Int> newCells = new List<Vector2Int>();
+
+        for (int i = 0; i < group.pieces.Count; i++)
+        {
+            if (group.pieces[i] != null)
+            {
+                newCells.Add(group.pieces[i].posInBoard + offset);
+            }
+        }
+
+        for (int i = 0; i < group.pieces.Count; i++)
+        {
+            Piece piece = group.pieces[i];
+            if (piece == null)
+            {
+                continue;
+            }
+
+            Vector2Int futureCell = piece.posInBoard + offset;
+            count += CountOutsideConnection(piece, futureCell, Vector2Int.up, group, newCells);
+            count += CountOutsideConnection(piece, futureCell, Vector2Int.right, group, newCells);
+            count += CountOutsideConnection(piece, futureCell, Vector2Int.down, group, newCells);
+            count += CountOutsideConnection(piece, futureCell, Vector2Int.left, group, newCells);
+        }
+
+        return count;
+    }
+
+    int CountOutsideConnection(Piece piece, Vector2Int futureCell, Vector2Int direction, PieceGroup group, List<Vector2Int> newCells)
+    {
+        Vector2Int neighborCell = futureCell + direction;
+        if (!IsInBoard(neighborCell)
+            || newCells.Contains(neighborCell)
+            || IsLockedRow(futureCell)
+            || IsLockedRow(neighborCell))
+        {
+            return 0;
+        }
+
+        Piece neighbor = pieces[neighborCell.x, neighborCell.y];
+        if (neighbor == null || group.Contains(neighbor) || piece.pictureSO != neighbor.pictureSO)
+        {
+            return 0;
+        }
+
+        Vector2Int boardDelta = neighbor.posInBoard - futureCell;
+        Vector2Int localDelta = neighbor.localCell - piece.localCell;
+        return boardDelta == localDelta && Mathf.Abs(boardDelta.x) + Mathf.Abs(boardDelta.y) == 1 ? 1 : 0;
+    }
+
     public void MovePieceToCell(Piece piece, Vector2Int targetCell)
     {
         if (IsInputLocked || piece == null || !IsInBoard(targetCell) || IsLockedRow(targetCell))
@@ -524,7 +674,6 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         }
 
         Vector2Int oldCell = piece.posInBoard;
-        bool wasConnectedBeforeMove = CanConnectWithNeighbor(piece);
         if (oldCell == targetCell)
         {
             LockInputForMove();
@@ -554,9 +703,9 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         piece.SetSnapPositionOnly(GetBoardWorldPosition(targetCell.x, targetCell.y));
         piece.MoveToSnapPosition();
 
-        if (!wasConnectedBeforeMove && CanConnectWithNeighbor(piece))
+        if (CanConnectWithNeighbor(piece))
         {
-            ApplyGravity(piece);
+            ApplyGravity(GetConnectedPieces(new List<Piece> { piece }));
         }
         else
         {
