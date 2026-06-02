@@ -1,4 +1,5 @@
 using DG.Tweening;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -32,6 +33,12 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
     public SpriteRenderer[] borders;
 
     public Collider2D _col;
+
+    bool isLock;
+    public bool IsLock => isLock;
+    public int numberOfLock;
+    public TMP_Text numberOfLock_txt;
+    public GameObject lockObj;
 
     public override void OnInit()
     {
@@ -498,4 +505,13 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
 
         MoveToSnapPosition();
     }
+
+    public void CheckPieceLock()
+    {
+        if(isLock)
+        {
+            numberOfLock_txt.text = numberOfLock.ToString();
+            lockObj.SetActive(true);
+        }    
+    }    
 }
