@@ -735,7 +735,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         }
         else
         {
-            ApplyGravity();
+            ApplyGravityKeepingConnectedPieces();
         }
 
         RebuildGroupsAfterMove();
@@ -1389,41 +1389,119 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     void ApplyGravity(HashSet<Piece> pinnedPieces)
     {
+        if (pinnedPieces == null)
+        {
+            pinnedPieces = new HashSet<Piece>();
+        }
+
         pendingOldGroupSetsForScale = GetActiveGroupIdSets();
         ClearGroups();
 
         for (int x = 0; x < width; x++)
         {
-            int writeY = 0;
-
-            for (int readY = 0; readY < height; readY++)
+            int segmentStartY = 0;
+            for (int y = 0; y <= height; y++)
             {
-                Piece piece = pieces[x, readY];
-                if (piece == null)
+                bool isEnd = y == height;
+                bool isLockBlocker = !isEnd && pieces[x, y] != null && pieces[x, y].IsLock;
+                if (isEnd || isLockBlocker)
                 {
-                    continue;
+                    ApplyGravitySegment(x, segmentStartY, y - 1, pinnedPieces, isEnd);
+                    segmentStartY = y + 1;
                 }
+            }
+        }
+    }
 
-                if (piece.IsLock || pinnedPieces.Contains(piece))
-                {
-                    writeY = readY + 1;
-                    continue;
-                }
+    void ApplyGravitySegment(int x, int startY, int endY, HashSet<Piece> pinnedPieces, bool canRefillFromDeck)
+    {
+        if (startY > endY)
+        {
+            return;
+        }
 
-                if (readY != writeY)
-                {
-                    pieces[x, writeY] = piece;
-                    pieces[x, readY] = null;
-
-                    piece.SetPosInBoard(x, writeY);
-                    piece.SetSnapPositionOnly(GetBoardWorldPosition(x, writeY));
-                    piece.MoveToSnapPosition();
-                }
-
-                writeY++;
+        List<Piece> movablePieces = new List<Piece>();
+        for (int y = startY; y <= endY; y++)
+        {
+            Piece piece = pieces[x, y];
+            if (piece == null || pinnedPieces.Contains(piece))
+            {
+                continue;
             }
 
-            FillColumnFromDeck(x, writeY);
+            movablePieces.Add(piece);
+            pieces[x, y] = null;
+        }
+
+        int movableIndex = 0;
+        for (int y = startY; y <= endY; y++)
+        {
+            if (pieces[x, y] != null)
+            {
+                continue;
+            }
+
+            if (movableIndex >= movablePieces.Count)
+            {
+                break;
+            }
+
+            Piece piece = movablePieces[movableIndex];
+            pieces[x, y] = piece;
+
+            if (piece.posInBoard.x != x || piece.posInBoard.y != y)
+            {
+                piece.SetPosInBoard(x, y);
+                piece.SetSnapPositionOnly(GetBoardWorldPosition(x, y));
+                piece.MoveToSnapPosition();
+            }
+
+            movableIndex++;
+        }
+
+        if (canRefillFromDeck)
+        {
+            FillEmptyCellsFromDeck(x, startY, endY);
+        }
+    }
+
+    void FillEmptyCellsFromDeck(int x, int startY, int endY)
+    {
+        if (columnDecks == null || x < 0 || x >= columnDecks.Length || columnDecks[x] == null)
+        {
+            return;
+        }
+
+        int spawnOrder = 0;
+        for (int y = startY; y <= endY; y++)
+        {
+            if (pieces[x, y] != null)
+            {
+                continue;
+            }
+
+            if (columnDecks[x].Count == 0)
+            {
+                return;
+            }
+
+            SpawnPieceData data = columnDecks[x].Dequeue();
+            Piece piece = SimplePool.Spawn<Piece>(piecePrb);
+            if (boardParent != null)
+            {
+                piece.transform.SetParent(boardParent, false);
+            }
+
+            Vector3 targetPosition = GetBoardWorldPosition(x, y);
+            Vector3 spawnPosition = GetBoardWorldPosition(x, height + spawnOrder);
+            piece.transform.position = spawnPosition;
+            piece.transform.localScale = Vector3.one;
+
+            piece.Setup(data.pictureSO, data.localCell, data.sprite, x, y, false, 0f);
+            piece.SetSnapPositionOnly(targetPosition);
+            pieces[x, y] = piece;
+            piece.MoveToSnapPosition();
+            spawnOrder++;
         }
     }
 

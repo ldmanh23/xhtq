@@ -498,7 +498,9 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
             }
 
             dragTransform.DOKill();
-            dragTransform.DOMove(dragStartPosition, 0.15f).SetEase(Ease.OutQuad);
+            SetGroupOrderOffset(dragGroup, 7);
+            dragTransform.DOMove(dragStartPosition, 0.15f).SetEase(Ease.OutQuad)
+                .OnComplete(() => ResetGroupOrder(dragGroup));
             return;
         }
 
