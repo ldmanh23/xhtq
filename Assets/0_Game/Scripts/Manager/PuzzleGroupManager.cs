@@ -3,16 +3,16 @@ using System.Collections.Generic;
 using DG.Tweening;
 using UnityEngine;
 
-public class PuzzleGroupManager
+public class PuzzleGroupManager : Singleton<PuzzleGroupManager>
 {
     public readonly List<PieceGroup> ActiveGroups = new List<PieceGroup>();
     public List<HashSet<string>> PendingOldGroupSetsForScale;
 
-    readonly Func<Vector2Int, bool> isInBoard;
-    readonly Func<Vector2Int, bool> isLockedRow;
-    readonly Func<PieceGroup, bool> isCompletedGroup;
+    Func<Vector2Int, bool> isInBoard;
+    Func<Vector2Int, bool> isLockedRow;
+    Func<PieceGroup, bool> isCompletedGroup;
 
-    public PuzzleGroupManager(
+    public void Initialize(
         Func<Vector2Int, bool> isInBoard,
         Func<Vector2Int, bool> isLockedRow,
         Func<PieceGroup, bool> isCompletedGroup)
@@ -89,6 +89,7 @@ public class PuzzleGroupManager
                     if (piece != null)
                     {
                         piece.transform.SetParent(parent, true);
+                        piece.SetCurrentGroup(null);
                     }
                 }
             }
@@ -198,6 +199,7 @@ public class PuzzleGroupManager
         for (int i = 0; i < groupPieces.Count; i++)
         {
             groupPieces[i].transform.SetParent(group.transform, true);
+            groupPieces[i].SetCurrentGroup(group);
         }
 
         if (!isCompletedGroup(group) && ShouldScaleNewGroup(groupPieces, oldGroupSets))

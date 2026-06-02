@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class PuzzleBoardSpawner
+public class PuzzleBoardSpawner : Singleton<PuzzleBoardSpawner>
 {
     public void BuildBoard(IngameManager manager)
     {

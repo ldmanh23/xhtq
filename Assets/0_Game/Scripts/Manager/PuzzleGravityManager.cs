@@ -2,13 +2,13 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class PuzzleGravityManager
+public class PuzzleGravityManager : Singleton<PuzzleGravityManager>
 {
-    readonly Func<Vector2Int, bool> isInBoard;
-    readonly Func<Piece, Piece, bool> canGroup;
-    readonly Func<int, int, Vector3> getBoardWorldPosition;
+    Func<Vector2Int, bool> isInBoard;
+    Func<Piece, Piece, bool> canGroup;
+    Func<int, int, Vector3> getBoardWorldPosition;
 
-    public PuzzleGravityManager(
+    public void Initialize(
         Func<Vector2Int, bool> isInBoard,
         Func<Piece, Piece, bool> canGroup,
         Func<int, int, Vector3> getBoardWorldPosition)

@@ -40,23 +40,25 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     private void Start()
     {
         EnsureGroupManager();
-        BuildBoard();
         UIManager.ins.OpenUI(UIID.UICGamePlay);
+        BuildBoard();
     }
 
     void EnsureGroupManager()
     {
         if (groupManager == null)
         {
-            groupManager = new PuzzleGroupManager(IsInBoard, IsLockedRow, IsCompletedGroup);
+            groupManager = PuzzleGroupManager.Instance;
         }
+
+        groupManager.Initialize(IsInBoard, IsLockedRow, IsCompletedGroup);
     }
 
     void EnsureBoardSpawner()
     {
         if (boardSpawner == null)
         {
-            boardSpawner = new PuzzleBoardSpawner();
+            boardSpawner = PuzzleBoardSpawner.Instance;
         }
     }
 
@@ -64,8 +66,10 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     {
         if (gravityManager == null)
         {
-            gravityManager = new PuzzleGravityManager(IsInBoard, CanGroup, GetBoardWorldPosition);
+            gravityManager = PuzzleGravityManager.Instance;
         }
+
+        gravityManager.Initialize(IsInBoard, CanGroup, GetBoardWorldPosition);
     }
 
     public void BuildBoard()
@@ -78,7 +82,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     {
         if (moveManager == null)
         {
-            moveManager = new PuzzleMoveManager();
+            moveManager = PuzzleMoveManager.Instance;
         }
     }
 
@@ -470,6 +474,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
                 }
 
                 piece.transform.SetParent(parent, true);
+                piece.SetCurrentGroup(null);
                 piece.transform.localScale = Vector3.one;
                 SimplePool.Despawn(piece);
             }
@@ -672,11 +677,210 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
         if (pieceA != null && pieceB != null)
         {
-            int orgOd = pieceA.spriteRenderer.sortingOrder;
-            pieceA.SetOrderOffset(orgOd + 7);
-            pieceB.SetOrderOffset(orgOd + 7);
-            pieceA.transform.DOScale(Vector3.one * 1.2f, 0.3f).SetLoops(2, LoopType.Yoyo).OnComplete(() => pieceA.SetOrderOffset(orgOd));
-            pieceB.transform.DOScale(Vector3.one * 1.2f, 0.3f).SetLoops(2, LoopType.Yoyo).OnComplete(() => pieceB.SetOrderOffset(orgOd));
+            pieceA.SetOrderOffset(7);
+            pieceB.SetOrderOffset(7);
+            pieceA.transform.DOScale(Vector3.one * 1.2f, 0.3f).SetLoops(2, LoopType.Yoyo).OnComplete(() => pieceA.SetOrderOffset(0));
+            pieceB.transform.DOScale(Vector3.one * 1.2f, 0.3f).SetLoops(2, LoopType.Yoyo).OnComplete(() => pieceB.SetOrderOffset(0));
+        }
+    }
+
+    public void BoosterClear()
+    {
+        if (IsInputLocked || pieces == null)
+        {
+            return;
+        }
+
+        List<Piece> candidates = GetBoosterClearCandidates();
+        while (candidates.Count > 0)
+        {
+            int index = Random.Range(0, candidates.Count);
+            Piece anchorPiece = candidates[index];
+            candidates.RemoveAt(index);
+
+            if (TryApplyBoosterClear(anchorPiece))
+            {
+                return;
+            }
+        }
+
+        Debug.Log("No valid piece for BoosterClear.");
+    }
+
+    List<Piece> GetBoosterClearCandidates()
+    {
+        List<Piece> candidates = new List<Piece>();
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                Piece piece = pieces[x, y];
+                if (piece == null || piece.IsLock || IsLockedRow(piece.posInBoard) || piece.pictureSO == null)
+                {
+                    continue;
+                }
+
+                candidates.Add(piece);
+            }
+        }
+
+        return candidates;
+    }
+
+    bool TryApplyBoosterClear(Piece anchorPiece)
+    {
+        if (anchorPiece == null || anchorPiece.pictureSO == null)
+        {
+            return false;
+        }
+
+        PictureSO picture = anchorPiece.pictureSO;
+        int requiredCount = picture.size.x * picture.size.y;
+        if (requiredCount <= 0)
+        {
+            return false;
+        }
+
+        List<Piece> picturePieces = GetBoardPiecesOfPicture(picture);
+        if (picturePieces.Count != requiredCount || !HasFullLocalCells(picturePieces, picture))
+        {
+            return false;
+        }
+
+        Dictionary<Piece, Vector2Int> pictureTargets = new Dictionary<Piece, Vector2Int>();
+        HashSet<Vector2Int> targetCells = new HashSet<Vector2Int>();
+        HashSet<Piece> picturePieceSet = new HashSet<Piece>(picturePieces);
+
+        for (int i = 0; i < picturePieces.Count; i++)
+        {
+            Piece piece = picturePieces[i];
+            Vector2Int targetCell = anchorPiece.posInBoard + (piece.localCell - anchorPiece.localCell);
+            if (!IsInBoard(targetCell) || IsLockedRow(targetCell) || !targetCells.Add(targetCell))
+            {
+                return false;
+            }
+
+            Piece targetPiece = pieces[targetCell.x, targetCell.y];
+            if (targetPiece != null && targetPiece.IsLock)
+            {
+                return false;
+            }
+
+            pictureTargets.Add(piece, targetCell);
+        }
+
+        List<Piece> displacedPieces = new List<Piece>();
+        foreach (Vector2Int targetCell in targetCells)
+        {
+            Piece targetPiece = pieces[targetCell.x, targetCell.y];
+            if (targetPiece != null && !picturePieceSet.Contains(targetPiece))
+            {
+                displacedPieces.Add(targetPiece);
+            }
+        }
+
+        List<Vector2Int> freeSourceCells = new List<Vector2Int>();
+        for (int i = 0; i < picturePieces.Count; i++)
+        {
+            Vector2Int sourceCell = picturePieces[i].posInBoard;
+            if (!targetCells.Contains(sourceCell))
+            {
+                freeSourceCells.Add(sourceCell);
+            }
+        }
+
+        if (displacedPieces.Count > freeSourceCells.Count)
+        {
+            return false;
+        }
+
+        IsInputLocked = true;
+        EnsureGroupManager();
+        groupManager.ClearGroups(pieces, boardParent, transform);
+
+        for (int i = 0; i < picturePieces.Count; i++)
+        {
+            ClearBoardCellIfContains(picturePieces[i]);
+        }
+
+        for (int i = 0; i < displacedPieces.Count; i++)
+        {
+            ClearBoardCellIfContains(displacedPieces[i]);
+        }
+
+        foreach (KeyValuePair<Piece, Vector2Int> pair in pictureTargets)
+        {
+            PlacePieceAtCell(pair.Key, pair.Value, pair.Key != anchorPiece);
+        }
+
+        for (int i = 0; i < displacedPieces.Count; i++)
+        {
+            PlacePieceAtCell(displacedPieces[i], freeSourceCells[i], true);
+        }
+
+        RebuildGroupsAfterMove();
+        return true;
+    }
+
+    List<Piece> GetBoardPiecesOfPicture(PictureSO picture)
+    {
+        List<Piece> result = new List<Piece>();
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                Piece piece = pieces[x, y];
+                if (piece == null || piece.IsLock || IsLockedRow(piece.posInBoard) || piece.pictureSO != picture)
+                {
+                    continue;
+                }
+
+                result.Add(piece);
+            }
+        }
+
+        return result;
+    }
+
+    bool HasFullLocalCells(List<Piece> picturePieces, PictureSO picture)
+    {
+        HashSet<Vector2Int> localCells = new HashSet<Vector2Int>();
+        for (int i = 0; i < picturePieces.Count; i++)
+        {
+            Vector2Int localCell = picturePieces[i].localCell;
+            if (localCell.x < 0 || localCell.x >= picture.size.x || localCell.y < 0 || localCell.y >= picture.size.y)
+            {
+                return false;
+            }
+
+            localCells.Add(localCell);
+        }
+
+        return localCells.Count == picture.size.x * picture.size.y;
+    }
+
+    void ClearBoardCellIfContains(Piece piece)
+    {
+        Vector2Int cell = piece.posInBoard;
+        if (IsInBoard(cell) && pieces[cell.x, cell.y] == piece)
+        {
+            pieces[cell.x, cell.y] = null;
+        }
+    }
+
+    void PlacePieceAtCell(Piece piece, Vector2Int cell, bool animate)
+    {
+        pieces[cell.x, cell.y] = piece;
+        piece.SetPosInBoard(cell.x, cell.y);
+        piece.SetSnapPositionOnly(GetBoardWorldPosition(cell.x, cell.y));
+
+        if (animate)
+        {
+            piece.MoveToSnapPosition();
+        }
+        else
+        {
+            piece.SetSnapPosition(GetBoardWorldPosition(cell.x, cell.y));
         }
     }
 

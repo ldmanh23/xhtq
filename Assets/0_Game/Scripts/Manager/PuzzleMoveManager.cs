@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class PuzzleMoveManager
+public class PuzzleMoveManager : Singleton<PuzzleMoveManager>
 {
     public Piece GetNearestPiece(IngameManager manager, Vector3 position, Piece ignorePiece, PieceGroup ignoreGroup)
     {

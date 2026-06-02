@@ -11,9 +11,19 @@ public class CanvasGameplay : UICanvas
     {
         IngameManager.ins.BoosterHint();
     }
-      
+
+    public void BoosterClear()
+    {
+        IngameManager.ins.BoosterClear();
+    }
+
     public void ShowHandTut(bool show)
     {
+        if (hand_Tut == null)
+        {
+            return;
+        }
+
         if(show)
             hand_Tut.SetActive(true);
         else

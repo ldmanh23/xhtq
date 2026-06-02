@@ -29,6 +29,7 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
     Transform dragTransform;
     PieceGroup dragGroup;
     PieceGroup pointerDownGroup;
+    PieceGroup currentGroup;
     Vector3 dragStartPosition;
 
     public SpriteRenderer[] borders;
@@ -50,6 +51,7 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
         KillFlip();
         KillLockTween();
         ClearLock();
+        SetCurrentGroup(null);
         ResetVisualState();
         ResetBordersImmediate();
     }
@@ -80,6 +82,7 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
         this.localCell = localCell;
         SetPosInBoard(x, y);
         ClearLock();
+        SetCurrentGroup(null);
         ResetVisualState();
         ResetBordersImmediate();
 
@@ -483,9 +486,14 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
         }
     }
 
+    public void SetCurrentGroup(PieceGroup group)
+    {
+        currentGroup = group;
+    }
+
     PieceGroup GetCurrentGroup()
     {
-        return transform.parent != null ? transform.parent.GetComponent<PieceGroup>() : null;
+        return currentGroup;
     }
 
     void MoveDragTransformBack()
