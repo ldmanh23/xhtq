@@ -18,9 +18,11 @@ MonoBehaviour:
   lockTopRows: 0
   resourcesImageFolder: LevelImg/1
   imageCount: 14
-  hasLockPieces: 1
-  lockPieces:
-  - cell: {x: 2, y: 3}
-    unlockImageCount: 1
-  - cell: {x: 3, y: 3}
-    unlockImageCount: 2
+  hasLockPieces: 0
+  lockPieces: []
+  isTutorialLevel: 1
+  tutorialGroupCells:
+  - {x: 3, y: 3}
+  - {x: 4, y: 3}
+  - {x: 4, y: 2}
+  tutorialPieceCell: {x: 1, y: 2}

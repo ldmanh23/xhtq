@@ -17,6 +17,9 @@ public class PuzzleLevelBuilderWindow : EditorWindow
         public int imageCount;
         public bool hasLockPieces;
         public readonly List<LevelLockPieceData> lockPieces = new List<LevelLockPieceData>();
+        public bool isTutorialLevel;
+        public readonly List<Vector2Int> tutorialGroupCells = new List<Vector2Int>();
+        public Vector2Int tutorialPieceCell = new Vector2Int(-1, -1);
 
         public LevelBuildConfig(int imageCount)
         {
@@ -113,6 +116,12 @@ public class PuzzleLevelBuilderWindow : EditorWindow
                 DrawLockGrid(config);
             }
 
+            config.isTutorialLevel = EditorGUILayout.Toggle("Tutorial Level", config.isTutorialLevel);
+            if (config.isTutorialLevel)
+            {
+                DrawTutorialGrid(config);
+            }
+
             EditorGUILayout.EndVertical();
         }
 
@@ -179,6 +188,122 @@ public class PuzzleLevelBuilderWindow : EditorWindow
         }
 
         return null;
+    }
+
+    void DrawTutorialGrid(LevelBuildConfig config)
+    {
+        EditorGUILayout.LabelField("Tutorial Board: G = group, P = remaining piece");
+
+        for (int y = boardSize.y - 1; y >= 0; y--)
+        {
+            EditorGUILayout.BeginHorizontal();
+            for (int x = 0; x < boardSize.x; x++)
+            {
+                Vector2Int cell = new Vector2Int(x, y);
+                bool isGroupCell = config.tutorialGroupCells.Contains(cell);
+                bool isPieceCell = config.tutorialPieceCell == cell;
+                string label = isGroupCell ? "G" : isPieceCell ? "P" : ".";
+                Color oldColor = GUI.backgroundColor;
+                GUI.backgroundColor = isGroupCell ? new Color(0.3f, 0.9f, 0.45f) : isPieceCell ? new Color(0.35f, 0.65f, 1f) : oldColor;
+
+                if (GUILayout.Button(label, GUILayout.Width(34f), GUILayout.Height(26f)))
+                {
+                    ToggleTutorialCell(config, cell);
+                }
+
+                GUI.backgroundColor = oldColor;
+            }
+            EditorGUILayout.EndHorizontal();
+        }
+
+        string message = $"Group cells: {config.tutorialGroupCells.Count}/3, Piece cell: {(IsValidCell(config.tutorialPieceCell) ? "1/1" : "0/1")}";
+        MessageType messageType = IsValidTutorialConfig(config) ? MessageType.Info : MessageType.Warning;
+        EditorGUILayout.HelpBox(message, messageType);
+    }
+
+    void ToggleTutorialCell(LevelBuildConfig config, Vector2Int cell)
+    {
+        if (config.tutorialGroupCells.Contains(cell))
+        {
+            config.tutorialGroupCells.Remove(cell);
+            config.tutorialPieceCell = cell;
+            return;
+        }
+
+        if (config.tutorialPieceCell == cell)
+        {
+            config.tutorialPieceCell = new Vector2Int(-1, -1);
+            return;
+        }
+
+        if (config.tutorialGroupCells.Count < 3)
+        {
+            config.tutorialGroupCells.Add(cell);
+            return;
+        }
+
+        config.tutorialPieceCell = cell;
+    }
+
+    bool IsValidTutorialConfig(LevelBuildConfig config)
+    {
+        return config.tutorialGroupCells.Count == 3
+            && IsValidCell(config.tutorialPieceCell)
+            && AreTutorialGroupCellsConnected(config.tutorialGroupCells)
+            && DoTutorialGroupCellsFit2x2(config.tutorialGroupCells);
+    }
+
+    bool IsValidCell(Vector2Int cell)
+    {
+        return cell.x >= 0 && cell.x < boardSize.x && cell.y >= 0 && cell.y < boardSize.y;
+    }
+
+    bool AreTutorialGroupCellsConnected(List<Vector2Int> cells)
+    {
+        if (cells == null || cells.Count != 3)
+        {
+            return false;
+        }
+
+        HashSet<Vector2Int> visited = new HashSet<Vector2Int>();
+        Queue<Vector2Int> queue = new Queue<Vector2Int>();
+        visited.Add(cells[0]);
+        queue.Enqueue(cells[0]);
+
+        while (queue.Count > 0)
+        {
+            Vector2Int cell = queue.Dequeue();
+            TryAddTutorialNeighbor(cell + Vector2Int.up, cells, visited, queue);
+            TryAddTutorialNeighbor(cell + Vector2Int.right, cells, visited, queue);
+            TryAddTutorialNeighbor(cell + Vector2Int.down, cells, visited, queue);
+            TryAddTutorialNeighbor(cell + Vector2Int.left, cells, visited, queue);
+        }
+
+        return visited.Count == cells.Count;
+    }
+
+    bool DoTutorialGroupCellsFit2x2(List<Vector2Int> cells)
+    {
+        Vector2Int minCell = cells[0];
+        Vector2Int maxCell = cells[0];
+        for (int i = 1; i < cells.Count; i++)
+        {
+            minCell = new Vector2Int(Mathf.Min(minCell.x, cells[i].x), Mathf.Min(minCell.y, cells[i].y));
+            maxCell = new Vector2Int(Mathf.Max(maxCell.x, cells[i].x), Mathf.Max(maxCell.y, cells[i].y));
+        }
+
+        return maxCell.x - minCell.x <= 1 && maxCell.y - minCell.y <= 1;
+    }
+
+    void TryAddTutorialNeighbor(Vector2Int cell, List<Vector2Int> cells, HashSet<Vector2Int> visited, Queue<Vector2Int> queue)
+    {
+        if (!cells.Contains(cell) || visited.Contains(cell))
+        {
+            return;
+        }
+
+        visited.Add(cell);
+        queue.Enqueue(cell);
     }
 
     void DrawImages()
@@ -344,6 +469,19 @@ public class PuzzleLevelBuilderWindow : EditorWindow
             levelSO.resourcesImageFolder = resourcesFolderPath;
             levelSO.imageCount = config.imageCount;
             levelSO.hasLockPieces = config.hasLockPieces;
+            levelSO.isTutorialLevel = config.isTutorialLevel;
+
+            if (config.isTutorialLevel)
+            {
+                if (!IsValidTutorialConfig(config))
+                {
+                    Debug.LogError($"{GetLevelName(i)} tutorial config must have 3 connected group cells and 1 piece cell.");
+                    return;
+                }
+
+                levelSO.tutorialGroupCells.AddRange(config.tutorialGroupCells);
+                levelSO.tutorialPieceCell = config.tutorialPieceCell;
+            }
 
             if (config.hasLockPieces)
             {

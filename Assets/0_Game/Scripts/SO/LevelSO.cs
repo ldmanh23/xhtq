@@ -16,6 +16,11 @@ public class LevelSO : ScriptableObject
     [Header("Lock Pieces")]
     public bool hasLockPieces;
     public List<LevelLockPieceData> lockPieces = new List<LevelLockPieceData>();
+
+    [Header("Tutorial")]
+    public bool isTutorialLevel;
+    public List<Vector2Int> tutorialGroupCells = new List<Vector2Int>();
+    public Vector2Int tutorialPieceCell = new Vector2Int(-1, -1);
 }
 
 [System.Serializable]

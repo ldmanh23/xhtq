@@ -28,7 +28,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     public bool IsInputLocked { get; private set; }
 
-    struct SpawnPieceData
+    public struct SpawnPieceData
     {
         public PictureSO pictureSO;
         public Vector2Int localCell;
@@ -69,6 +69,11 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
         SortSpawnPiecesByPictureSize(spawnPieces);
 
+        if (curLevel.isTutorialLevel)
+        {
+            TutorialLevelArranger.Apply(curLevel, spawnPieces, width, height);
+        }
+
         Vector2 pieceSize = GetPieceSize(piecePrb);
         Vector2 boardOffset = new Vector2(
             (width - 1) * pieceSize.x * 0.5f,
@@ -76,7 +81,10 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         );
 
         int spawnCount = GetSpawnCount(spawnPieces.Count);
-        EnsureOneCompletePictureInBoard(spawnPieces, spawnCount);
+        if (!curLevel.isTutorialLevel)
+        {
+            EnsureOneCompletePictureInBoard(spawnPieces, spawnCount);
+        }
         BuildColumnDecks(spawnPieces, spawnCount);
         int spawnIndex = 0;
 
