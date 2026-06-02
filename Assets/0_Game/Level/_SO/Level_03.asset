@@ -18,3 +18,5 @@ MonoBehaviour:
   lockTopRows: 0
   resourcesImageFolder: LevelImg/1
   imageCount: 18
+  hasLockPieces: 0
+  lockPieces: []

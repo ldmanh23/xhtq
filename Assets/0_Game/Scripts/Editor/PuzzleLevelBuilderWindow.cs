@@ -12,17 +12,39 @@ public class PuzzleLevelBuilderWindow : EditorWindow
         public bool validName;
     }
 
+    class LevelBuildConfig
+    {
+        public int imageCount;
+        public bool hasLockPieces;
+        public readonly List<LevelLockPieceData> lockPieces = new List<LevelLockPieceData>();
+
+        public LevelBuildConfig(int imageCount)
+        {
+            this.imageCount = imageCount;
+        }
+    }
+
     DefaultAsset imageFolder;
     string levelNamePrefix = "Level_01";
     Vector2Int boardSize = new Vector2Int(6, 6);
     bool shufflePieces = true;
     bool lockTopRows;
     string levelSOOutputRoot = "Assets/0_Game/Level/_SO";
-    readonly int[] levelImageCounts = { 14, 16, 18, 20, 20 };
+    readonly LevelBuildConfig[] levelConfigs =
+    {
+        new LevelBuildConfig(14),
+        new LevelBuildConfig(16),
+        new LevelBuildConfig(18),
+        new LevelBuildConfig(20),
+        new LevelBuildConfig(20)
+    };
     float previewSize = 160f;
 
     readonly List<ImageInfo> images = new List<ImageInfo>();
     Vector2 scroll;
+    Vector2 levelSettingsScroll;
+    bool showLevelSettings = true;
+    bool showImages = true;
 
     [MenuItem("Tools/Puzzle/Level Builder")]
     static void Open()
@@ -44,8 +66,6 @@ public class PuzzleLevelBuilderWindow : EditorWindow
         levelSOOutputRoot = NormalizeAssetFolderPath(EditorGUILayout.TextField("Level SO Folder", levelSOOutputRoot));
         previewSize = Mathf.Clamp(EditorGUILayout.FloatField("Preview Size", previewSize), 64f, 220f);
 
-        DrawLevelImageCounts();
-
         using (new EditorGUI.DisabledScope(imageFolder == null))
         {
             if (GUILayout.Button("Scan Image Folder"))
@@ -54,9 +74,6 @@ public class PuzzleLevelBuilderWindow : EditorWindow
             }
         }
 
-        DrawImages();
-        DrawSummary();
-
         using (new EditorGUI.DisabledScope(imageFolder == null))
         {
             if (GUILayout.Button("Generate 5 Level SOs"))
@@ -64,25 +81,116 @@ public class PuzzleLevelBuilderWindow : EditorWindow
                 GenerateLevelSOs();
             }
         }
+
+        DrawLevelConfigs();
+        DrawSummary();
+        DrawImages();
     }
 
-    void DrawLevelImageCounts()
+    void DrawLevelConfigs()
     {
         EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Image Count Per Level", EditorStyles.boldLabel);
+        showLevelSettings = EditorGUILayout.Foldout(showLevelSettings, "Level Settings", true);
+        if (!showLevelSettings)
+        {
+            return;
+        }
 
-        for (int i = 0; i < levelImageCounts.Length; i++)
+        levelSettingsScroll = EditorGUILayout.BeginScrollView(levelSettingsScroll, GUILayout.Height(260f));
+
+        for (int i = 0; i < levelConfigs.Length; i++)
         {
             string levelName = GetLevelName(i);
-            levelImageCounts[i] = Mathf.Max(1, EditorGUILayout.IntField(levelName, levelImageCounts[i]));
+            LevelBuildConfig config = levelConfigs[i];
+
+            EditorGUILayout.BeginVertical("box");
+            EditorGUILayout.LabelField(levelName, EditorStyles.boldLabel);
+            config.imageCount = Mathf.Max(1, EditorGUILayout.IntField("Image Count", config.imageCount));
+            config.hasLockPieces = EditorGUILayout.Toggle("Has Lock Pieces", config.hasLockPieces);
+
+            if (config.hasLockPieces)
+            {
+                DrawLockGrid(config);
+            }
+
+            EditorGUILayout.EndVertical();
         }
+
+        EditorGUILayout.EndScrollView();
+    }
+
+    void DrawLockGrid(LevelBuildConfig config)
+    {
+        EditorGUILayout.LabelField("Lock Board");
+
+        for (int y = boardSize.y - 1; y >= 0; y--)
+        {
+            EditorGUILayout.BeginHorizontal();
+            for (int x = 0; x < boardSize.x; x++)
+            {
+                Vector2Int cell = new Vector2Int(x, y);
+                LevelLockPieceData lockData = FindLockData(config, cell);
+                string label = lockData != null ? lockData.unlockImageCount.ToString() : ".";
+                Color oldColor = GUI.backgroundColor;
+                GUI.backgroundColor = lockData != null ? new Color(1f, 0.7f, 0.25f) : oldColor;
+
+                if (GUILayout.Button(label, GUILayout.Width(34f), GUILayout.Height(26f)))
+                {
+                    if (lockData != null)
+                    {
+                        config.lockPieces.Remove(lockData);
+                    }
+                    else
+                    {
+                        config.lockPieces.Add(new LevelLockPieceData
+                        {
+                            cell = cell,
+                            unlockImageCount = 1
+                        });
+                    }
+                }
+
+                GUI.backgroundColor = oldColor;
+            }
+            EditorGUILayout.EndHorizontal();
+        }
+
+        for (int i = config.lockPieces.Count - 1; i >= 0; i--)
+        {
+            LevelLockPieceData lockData = config.lockPieces[i];
+            if (lockData == null || lockData.cell.x < 0 || lockData.cell.x >= boardSize.x || lockData.cell.y < 0 || lockData.cell.y >= boardSize.y)
+            {
+                config.lockPieces.RemoveAt(i);
+                continue;
+            }
+
+            lockData.unlockImageCount = Mathf.Max(1, EditorGUILayout.IntField($"Cell {lockData.cell.x},{lockData.cell.y}", lockData.unlockImageCount));
+        }
+    }
+
+    LevelLockPieceData FindLockData(LevelBuildConfig config, Vector2Int cell)
+    {
+        for (int i = 0; i < config.lockPieces.Count; i++)
+        {
+            if (config.lockPieces[i] != null && config.lockPieces[i].cell == cell)
+            {
+                return config.lockPieces[i];
+            }
+        }
+
+        return null;
     }
 
     void DrawImages()
     {
         EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Images", EditorStyles.boldLabel);
-        scroll = EditorGUILayout.BeginScrollView(scroll, GUILayout.MinHeight(360f), GUILayout.ExpandHeight(true));
+        showImages = EditorGUILayout.Foldout(showImages, "Images", true);
+        if (!showImages)
+        {
+            return;
+        }
+
+        scroll = EditorGUILayout.BeginScrollView(scroll, GUILayout.MinHeight(300f), GUILayout.ExpandHeight(true));
 
         for (int i = 0; i < images.Count; i++)
         {
@@ -225,15 +333,35 @@ public class PuzzleLevelBuilderWindow : EditorWindow
 
         LevelSO lastLevel = null;
 
-        for (int i = 0; i < levelImageCounts.Length; i++)
+        for (int i = 0; i < levelConfigs.Length; i++)
         {
+            LevelBuildConfig config = levelConfigs[i];
             LevelSO levelSO = CreateInstance<LevelSO>();
             levelSO.boardSize = boardSize;
             levelSO.initialPieceCount = 0;
             levelSO.shufflePieces = shufflePieces;
             levelSO.lockTopRows = lockTopRows;
             levelSO.resourcesImageFolder = resourcesFolderPath;
-            levelSO.imageCount = levelImageCounts[i];
+            levelSO.imageCount = config.imageCount;
+            levelSO.hasLockPieces = config.hasLockPieces;
+
+            if (config.hasLockPieces)
+            {
+                for (int j = 0; j < config.lockPieces.Count; j++)
+                {
+                    LevelLockPieceData lockData = config.lockPieces[j];
+                    if (lockData == null)
+                    {
+                        continue;
+                    }
+
+                    levelSO.lockPieces.Add(new LevelLockPieceData
+                    {
+                        cell = lockData.cell,
+                        unlockImageCount = Mathf.Max(1, lockData.unlockImageCount)
+                    });
+                }
+            }
 
             string levelName = GetLevelName(i);
             string levelPath = AssetDatabase.GenerateUniqueAssetPath($"{outputFolder}/{levelName}.asset");
@@ -245,7 +373,7 @@ public class PuzzleLevelBuilderWindow : EditorWindow
         AssetDatabase.Refresh();
 
         Selection.activeObject = lastLevel;
-        Debug.Log($"Generated {levelImageCounts.Length} levels: {resourcesFolderPath}");
+        Debug.Log($"Generated {levelConfigs.Length} levels: {resourcesFolderPath}");
     }
 
     string GetLevelName(int offset)

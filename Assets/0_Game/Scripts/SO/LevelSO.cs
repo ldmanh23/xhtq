@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 [CreateAssetMenu(fileName = "Level_", menuName = "Puzzle/Level")]
 public class LevelSO : ScriptableObject
@@ -11,4 +12,15 @@ public class LevelSO : ScriptableObject
     [Header("Runtime Image Folder")]
     public string resourcesImageFolder;
     public int imageCount = 14;
+
+    [Header("Lock Pieces")]
+    public bool hasLockPieces;
+    public List<LevelLockPieceData> lockPieces = new List<LevelLockPieceData>();
+}
+
+[System.Serializable]
+public class LevelLockPieceData
+{
+    public Vector2Int cell;
+    public int unlockImageCount = 1;
 }

@@ -112,7 +112,7 @@ MonoBehaviour:
   m_fontColor32:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
+  m_fontColor: {r: 0, g: 0, b: 0, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -506,9 +506,9 @@ MonoBehaviour:
   - {fileID: 1445268398254873552}
   - {fileID: 6622465138908635178}
   _col: {fileID: 735370324940967186}
-  isLock: 0
   numberOfLock: 0
-  lockObj: {fileID: 0}
+  numberOfLock_txt: {fileID: 7966696826652218301}
+  lockObj: {fileID: 6985670048520907864}
 --- !u!61 &735370324940967186
 BoxCollider2D:
   m_ObjectHideFlags: 0
@@ -755,8 +755,8 @@ MonoBehaviour:
   localCell: {x: 0, y: 0}
   borders: []
   _col: {fileID: 0}
-  isLock: 0
   numberOfLock: 0
+  numberOfLock_txt: {fileID: 0}
   lockObj: {fileID: 0}
 --- !u!1 &6985670048520907864
 GameObject:
@@ -775,7 +775,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &2014155822886772650
 Transform:
   m_ObjectHideFlags: 0
@@ -873,8 +873,8 @@ MonoBehaviour:
   localCell: {x: 0, y: 0}
   borders: []
   _col: {fileID: 0}
-  isLock: 0
   numberOfLock: 0
+  numberOfLock_txt: {fileID: 0}
   lockObj: {fileID: 0}
 --- !u!1 &7208246176589809629
 GameObject:

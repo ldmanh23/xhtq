@@ -105,6 +105,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
                 SpawnPieceData data = spawnPieces[spawnIndex];
                 float delay = spawnIndex * flipDelayEachPiece;
                 piece.Setup(data.pictureSO, data.localCell, data.sprite, x, y, playSpawnFlip, delay);
+                ApplyInitialLock(piece, x, y, playSpawnFlip ? delay + piece.flipDuration : 0f);
                 piece.SetSnapPosition(piece.transform.position);
 
                 pieces[x, y] = piece;
@@ -130,6 +131,24 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     {
         int boardCapacity = width * height;
         return Mathf.Min(boardCapacity, availablePieceCount);
+    }
+
+    void ApplyInitialLock(Piece piece, int x, int y, float showDelay)
+    {
+        if (piece == null || curLevel == null || !curLevel.hasLockPieces || curLevel.lockPieces == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < curLevel.lockPieces.Count; i++)
+        {
+            LevelLockPieceData lockData = curLevel.lockPieces[i];
+            if (lockData != null && lockData.cell == new Vector2Int(x, y))
+            {
+                piece.SetLock(lockData.unlockImageCount, showDelay);
+                return;
+            }
+        }
     }
 
     List<SpawnPieceData> BuildSpawnPieces()
@@ -492,7 +511,9 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             for (int y = 0; y < pieces.GetLength(1); y++)
             {
                 Piece piece = pieces[x, y];
-                if (piece == ignorePiece || (ignoreGroup != null && piece != null && ignoreGroup.Contains(piece)))
+                if (piece == ignorePiece
+                    || (piece != null && piece.IsLock)
+                    || (ignoreGroup != null && piece != null && ignoreGroup.Contains(piece)))
                 {
                     continue;
                 }
@@ -590,6 +611,11 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         for (int i = 0; i < newCells.Count; i++)
         {
             Piece targetPiece = pieces[newCells[i].x, newCells[i].y];
+            if (targetPiece != null && targetPiece.IsLock)
+            {
+                return false;
+            }
+
             if (targetPiece != null && !group.Contains(targetPiece))
             {
                 swapPieceCount++;
@@ -650,7 +676,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         }
 
         Piece neighbor = pieces[neighborCell.x, neighborCell.y];
-        if (neighbor == null || group.Contains(neighbor) || piece.pictureSO != neighbor.pictureSO)
+        if (neighbor == null || neighbor.IsLock || group.Contains(neighbor) || piece.pictureSO != neighbor.pictureSO)
         {
             return 0;
         }
@@ -662,7 +688,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     public void MovePieceToCell(Piece piece, Vector2Int targetCell)
     {
-        if (IsInputLocked || piece == null || !IsInBoard(targetCell) || IsLockedRow(targetCell))
+        if (IsInputLocked || piece == null || piece.IsLock || !IsInBoard(targetCell) || IsLockedRow(targetCell))
         {
             if (piece != null)
             {
@@ -684,7 +710,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         Piece targetPiece = pieces[targetCell.x, targetCell.y];
         if (targetPiece != null)
         {
-            if (IsLockedRow(targetCell))
+            if (targetPiece.IsLock || IsLockedRow(targetCell))
             {
                 LockInputForMove();
                 piece.MoveToSnapPosition();
@@ -717,7 +743,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     public void SwapPieces(Piece firstPiece, Piece secondPiece)
     {
-        if (IsInputLocked)
+        if (IsInputLocked || firstPiece == null || secondPiece == null || firstPiece.IsLock || secondPiece.IsLock)
         {
             return;
         }
@@ -764,7 +790,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             return;
         }
 
-        if (group == null || grabbedPiece == null || !IsInBoard(targetCell) || IsLockedRow(targetCell))
+        if (group == null || grabbedPiece == null || GroupHasLockedPiece(group) || !IsInBoard(targetCell) || IsLockedRow(targetCell))
         {
             MoveGroupBack(group);
             return;
@@ -814,7 +840,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             }
             else if (!group.Contains(swapPiece))
             {
-                if (IsLockedRow(newCells[i]))
+                if (swapPiece.IsLock || IsLockedRow(newCells[i]))
                 {
                     MoveGroupBack(group);
                     return;
@@ -889,6 +915,24 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         }
 
         RebuildGroupsAfterMove();
+    }
+
+    bool GroupHasLockedPiece(PieceGroup group)
+    {
+        if (group == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < group.pieces.Count; i++)
+        {
+            if (group.pieces[i] != null && group.pieces[i].IsLock)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     void MoveGroupBack(PieceGroup group)
@@ -1052,7 +1096,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             for (int y = 0; y < pieces.GetLength(1); y++)
             {
                 Piece piece = pieces[x, y];
-                if (piece != null && !group.Contains(piece))
+                if (piece != null && !piece.IsLock && !group.Contains(piece))
                 {
                     return piece;
                 }
@@ -1172,6 +1216,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         DOVirtual.DelayedCall(CompleteFlashDuration + CompleteClearDuration, () =>
         {
             ClearCompletedGroups(completedGroups);
+            DecreaseAllLockPieces();
             ApplyGravity();
             RebuildGroupsAfterMove();
             isResolvingComplete = false;
@@ -1284,6 +1329,26 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         }
     }
 
+    void DecreaseAllLockPieces()
+    {
+        if (pieces == null)
+        {
+            return;
+        }
+
+        for (int x = 0; x < pieces.GetLength(0); x++)
+        {
+            for (int y = 0; y < pieces.GetLength(1); y++)
+            {
+                Piece piece = pieces[x, y];
+                if (piece != null && piece.IsLock)
+                {
+                    piece.DecreaseLock();
+                }
+            }
+        }
+    }
+
     void ApplyGravity()
     {
         ApplyGravity((Piece)null, false);
@@ -1339,7 +1404,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
                     continue;
                 }
 
-                if (pinnedPieces.Contains(piece))
+                if (piece.IsLock || pinnedPieces.Contains(piece))
                 {
                     writeY = readY + 1;
                     continue;
@@ -1380,7 +1445,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             for (int y = 0; y < pieces.GetLength(1); y++)
             {
                 Piece piece = pieces[x, y];
-                if (piece != null && CanConnectWithNeighbor(piece))
+                if (piece != null && !piece.IsLock && CanConnectWithNeighbor(piece))
                 {
                     pinnedPieces.Add(piece);
                 }
@@ -1544,7 +1609,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     bool CanGroup(Piece a, Piece b)
     {
-        if (a == null || b == null || a.pictureSO != b.pictureSO)
+        if (a == null || b == null || a.IsLock || b.IsLock || a.pictureSO != b.pictureSO)
         {
             return false;
         }

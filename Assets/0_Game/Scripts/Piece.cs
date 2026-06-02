@@ -17,6 +17,7 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
     public Vector2Int localCell;
 
     Sequence flipSequence;
+    Tween lockTween;
     Sprite backSprite;
     Vector3 defaultPieceScale = Vector3.one;
     Vector3 defaultPictureScale = Vector3.one;
@@ -47,6 +48,8 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
     public override void OnDespawn()
     {
         KillFlip();
+        KillLockTween();
+        ClearLock();
         ResetVisualState();
         ResetBordersImmediate();
     }
@@ -76,6 +79,7 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
         pictureId = pictureSO != null ? pictureSO.pictureId : 0;
         this.localCell = localCell;
         SetPosInBoard(x, y);
+        ClearLock();
         ResetVisualState();
         ResetBordersImmediate();
 
@@ -206,7 +210,7 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
 
     public void OnPointerDown(PointerEventData eventData)
     {
-        if (IngameManager.ins != null && IngameManager.ins.IsLockedRow(posInBoard))
+        if (isLock || (IngameManager.ins != null && IngameManager.ins.IsLockedRow(posInBoard)))
         {
             return;
         }
@@ -231,7 +235,7 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
 
     public void OnBeginDrag(PointerEventData eventData)
     {
-        if (IngameManager.ins != null && (IngameManager.ins.IsInputLocked || IngameManager.ins.IsLockedRow(posInBoard)))
+        if (isLock || (IngameManager.ins != null && (IngameManager.ins.IsInputLocked || IngameManager.ins.IsLockedRow(posInBoard))))
         {
             ResetPointerDownOrder();
             dragTransform = null;
@@ -510,8 +514,83 @@ public class Piece : GameUnit, IPointerDownHandler, IPointerUpHandler, IBeginDra
     {
         if(isLock)
         {
-            numberOfLock_txt.text = numberOfLock.ToString();
-            lockObj.SetActive(true);
-        }    
-    }    
+            if (numberOfLock_txt != null)
+            {
+                numberOfLock_txt.text = numberOfLock.ToString();
+            }
+
+            if (lockObj != null)
+            {
+                lockObj.SetActive(true);
+            }
+        }
+        else if (lockObj != null)
+        {
+            lockObj.SetActive(false);
+        }
+    }
+
+    void KillLockTween()
+    {
+        if (lockTween != null)
+        {
+            lockTween.Kill();
+            lockTween = null;
+        }
+    }
+
+    public void SetLock(int lockCount)
+    {
+        SetLock(lockCount, 0f);
+    }
+
+    public void SetLock(int lockCount, float showDelay)
+    {
+        KillLockTween();
+        isLock = lockCount > 0;
+        numberOfLock = Mathf.Max(0, lockCount);
+
+        if (!isLock)
+        {
+            CheckPieceLock();
+            return;
+        }
+
+        if (lockObj != null)
+        {
+            lockObj.SetActive(false);
+        }
+
+        if (showDelay <= 0f)
+        {
+            CheckPieceLock();
+            return;
+        }
+
+        lockTween = DOVirtual.DelayedCall(showDelay, () =>
+        {
+            lockTween = null;
+            CheckPieceLock();
+        });
+    }
+
+    public void ClearLock()
+    {
+        KillLockTween();
+        isLock = false;
+        numberOfLock = 0;
+        CheckPieceLock();
+    }
+
+    public void DecreaseLock()
+    {
+        if (!isLock)
+        {
+            return;
+        }
+
+        numberOfLock = Mathf.Max(0, numberOfLock - 1);
+        isLock = numberOfLock > 0;
+        CheckPieceLock();
+    }
 }
