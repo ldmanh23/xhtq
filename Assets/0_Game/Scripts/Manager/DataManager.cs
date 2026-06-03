@@ -63,9 +63,12 @@ public class PlayerData
     [Header("--------- Game Params ---------")]
     public int gold = 0;
     public int cup = 0;
-    public int level = 0;//Level hiện tại
-    public int idSkin = 0; //Skin
-    
+    public int level = 0;
+
+    public int numberBoosterHint = 0;
+    public int numberBoosterSort = 0;
+    public int numberBoosterClear = 0;
+
 
     [Header("--------- Firebase ---------")]
     public string timeInstall;//Thời điểm cài game

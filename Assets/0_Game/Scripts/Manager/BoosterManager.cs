@@ -4,6 +4,10 @@ using UnityEngine;
 
 public class BoosterManager : Singleton<BoosterManager>
 {
+    Sequence hintSequence;
+    Piece hintPieceA;
+    Piece hintPieceB;
+
     struct SortAssignment
     {
         public IngameManager.SpawnPieceData data;
@@ -21,6 +25,12 @@ public class BoosterManager : Singleton<BoosterManager>
 
     public void BoosterHint(IngameManager manager)
     {
+        if (DataManager.ins.dt.level < Constant.levelUnlockBoosterHint) return;
+        if (manager.IsInputLocked || manager.pieces == null || hintSequence != null)
+        {
+            return;
+        }
+
         Piece pieceA = null, pieceB = null;
         List<Piece> boardPieces = new List<Piece>();
 
@@ -71,14 +81,47 @@ public class BoosterManager : Singleton<BoosterManager>
             return;
         }
 
-        pieceA.SetOrderOffset(7);
-        pieceB.SetOrderOffset(7);
-        pieceA.transform.DOScale(Vector3.one * 1.2f, 0.3f).SetLoops(2, LoopType.Yoyo).OnComplete(() => pieceA.SetOrderOffset(0));
-        pieceB.transform.DOScale(Vector3.one * 1.2f, 0.3f).SetLoops(2, LoopType.Yoyo).OnComplete(() => pieceB.SetOrderOffset(0));
+        PlayHintEffect(pieceA, pieceB);
+    }
+
+    void PlayHintEffect(Piece pieceA, Piece pieceB)
+    {
+        hintPieceA = pieceA;
+        hintPieceB = pieceB;
+
+        hintPieceA.SetOrderOffset(7);
+        hintPieceB.SetOrderOffset(7);
+
+        hintSequence = DOTween.Sequence();
+        hintSequence.Join(hintPieceA.transform.DOScale(Vector3.one * 1.2f, 0.3f).SetLoops(2, LoopType.Yoyo));
+        hintSequence.Join(hintPieceB.transform.DOScale(Vector3.one * 1.2f, 0.3f).SetLoops(2, LoopType.Yoyo));
+        hintSequence.OnKill(() => hintSequence = null);
+        hintSequence.OnComplete(ResetHintEffect);
+    }
+
+    void ResetHintEffect()
+    {
+        if (hintPieceA != null)
+        {
+            hintPieceA.transform.localScale = Vector3.one;
+            hintPieceA.SetOrderOffset(0);
+        }
+
+        if (hintPieceB != null)
+        {
+            hintPieceB.transform.localScale = Vector3.one;
+            hintPieceB.SetOrderOffset(0);
+        }
+
+        hintPieceA = null;
+        hintPieceB = null;
+        hintSequence = null;
     }
 
     public void BoosterClear(IngameManager manager)
     {
+        if (DataManager.ins.dt.level < Constant.levelUnlockBoosterClear) return;
+
         if (manager.IsInputLocked || manager.pieces == null)
         {
             return;
@@ -386,6 +429,8 @@ public class BoosterManager : Singleton<BoosterManager>
 
     public void BoosterSort(IngameManager manager)
     {
+        if (DataManager.ins.dt.level < Constant.levelUnlockBoosterSort) return;
+
         if (manager.IsInputLocked || manager.pieces == null)
         {
             return;
@@ -857,8 +902,8 @@ public class BoosterManager : Singleton<BoosterManager>
         }
 
         float flipToBackTime = manager.piecePrb != null ? manager.piecePrb.flipDuration : 0.18f;
-        float centerMoveDuration = 0.5f;
-        float dealMoveDuration = 0.5f;
+        float centerMoveDuration = Constant.timerAnimBoosterSort;
+        float dealMoveDuration = Constant.timerAnimBoosterSort;
 
         DOVirtual.DelayedCall(flipToBackTime, () =>
         {

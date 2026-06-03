@@ -9,6 +9,19 @@ public class CanvasGameplay : UICanvas
     public GameObject hand_Tut; 
     public TMP_Text timerTxt;
 
+    public TMP_Text txt_Hint;
+    public TMP_Text txt_Sort;
+    public TMP_Text txt_Clear;
+    public GameObject obj_LockHint;
+    public GameObject obj_LockSort;
+    public GameObject obj_LockClear;
+
+    public override void Open()
+    {
+        base.Open();
+        UpdateVisualBtnBooster();
+    }
+
     public void BoosterHint()
     {
         IngameManager.ins.BoosterHint();
@@ -23,6 +36,17 @@ public class CanvasGameplay : UICanvas
     {
         IngameManager.ins.BoosterSort();
     }
+
+    public void UpdateVisualBtnBooster()
+    {
+        obj_LockHint.SetActive(DataManager.ins.dt.level < Constant.levelUnlockBoosterHint);
+        obj_LockSort.SetActive(DataManager.ins.dt.level < Constant.levelUnlockBoosterSort);
+        obj_LockClear.SetActive(DataManager.ins.dt.level < Constant.levelUnlockBoosterClear);
+
+        txt_Hint.text = DataManager.ins.dt.numberBoosterHint.ToString();
+        txt_Sort.text = DataManager.ins.dt.numberBoosterSort.ToString();
+        txt_Clear.text = DataManager.ins.dt.numberBoosterClear.ToString();
+    }    
 
     public void ShowHandTut(bool show)
     {
