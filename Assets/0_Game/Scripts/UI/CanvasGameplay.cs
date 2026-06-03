@@ -78,4 +78,9 @@ public class CanvasGameplay : UICanvas
     {
         IngameManager.ins.UnlockTopLockedRows();
     }    
+
+    public void RestartLevel()
+    {
+        IngameManager.ins.RestartLevel();
+    }
 }

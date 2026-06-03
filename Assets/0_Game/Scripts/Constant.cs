@@ -2,6 +2,8 @@ using UnityEngine;
 
 public class Constant 
 {
+    public const string SCENE_GAMEPLAY = "GamePlay";
+
     public const int levelUnlockBoosterHint = 3;
     public const int levelUnlockBoosterSort = 4;
     public const int levelUnlockBoosterClear = 5;

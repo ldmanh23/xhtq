@@ -12,6 +12,7 @@ public class BoosterManager : Singleton<BoosterManager>
     {
         public IngameManager.SpawnPieceData data;
         public Vector2Int cell;
+        public int lockCount;
     }
 
     struct ClearAssignment
@@ -436,12 +437,13 @@ public class BoosterManager : Singleton<BoosterManager>
             return;
         }
 
-        List<Piece> movablePieces = GetMovableBoardPieces(manager);
+        List<Piece> movablePieces = GetSortableBoardPieces(manager);
         if (movablePieces.Count == 0)
         {
             return;
         }
 
+        Dictionary<Vector2Int, int> lockCountsByCell = GetLockCountsByCell(movablePieces);
         List<Vector2Int> movableCells = GetCellsOfPieces(movablePieces);
         List<IngameManager.SpawnPieceData> sortData = GetSpawnDataOfPieces(movablePieces);
 
@@ -457,7 +459,7 @@ public class BoosterManager : Singleton<BoosterManager>
             return;
         }
 
-        List<SortAssignment> assignments = BuildSortAssignments(sortData, movableCells);
+        List<SortAssignment> assignments = BuildSortAssignments(sortData, movableCells, lockCountsByCell);
         if (assignments.Count != movablePieces.Count)
         {
             Debug.Log("Cannot build BoosterSort assignments.");
@@ -467,7 +469,7 @@ public class BoosterManager : Singleton<BoosterManager>
         PlayBoosterSortSequence(manager, movablePieces, assignments);
     }
 
-    List<Piece> GetMovableBoardPieces(IngameManager manager)
+    List<Piece> GetSortableBoardPieces(IngameManager manager)
     {
         List<Piece> result = new List<Piece>();
         for (int x = 0; x < manager.width; x++)
@@ -475,7 +477,7 @@ public class BoosterManager : Singleton<BoosterManager>
             for (int y = 0; y < manager.height; y++)
             {
                 Piece piece = manager.pieces[x, y];
-                if (piece == null || piece.IsLock || manager.IsLockedRow(piece.posInBoard))
+                if (piece == null)
                 {
                     continue;
                 }
@@ -497,6 +499,21 @@ public class BoosterManager : Singleton<BoosterManager>
 
         SortCells(cells);
         return cells;
+    }
+
+    Dictionary<Vector2Int, int> GetLockCountsByCell(List<Piece> boardPieces)
+    {
+        Dictionary<Vector2Int, int> result = new Dictionary<Vector2Int, int>();
+        for (int i = 0; i < boardPieces.Count; i++)
+        {
+            Piece piece = boardPieces[i];
+            if (piece != null && piece.IsLock)
+            {
+                result[piece.posInBoard] = piece.numberOfLock;
+            }
+        }
+
+        return result;
     }
 
     List<IngameManager.SpawnPieceData> GetSpawnDataOfPieces(List<Piece> boardPieces)
@@ -760,7 +777,10 @@ public class BoosterManager : Singleton<BoosterManager>
         manager.columnDecks[column].Enqueue(data);
     }
 
-    List<SortAssignment> BuildSortAssignments(List<IngameManager.SpawnPieceData> sortData, List<Vector2Int> movableCells)
+    List<SortAssignment> BuildSortAssignments(
+        List<IngameManager.SpawnPieceData> sortData,
+        List<Vector2Int> movableCells,
+        Dictionary<Vector2Int, int> lockCountsByCell)
     {
         List<SortAssignment> assignments = new List<SortAssignment>();
         ShuffleSpawnData(sortData);
@@ -768,7 +788,9 @@ public class BoosterManager : Singleton<BoosterManager>
 
         for (int i = 0; i < sortData.Count && i < movableCells.Count; i++)
         {
-            assignments.Add(new SortAssignment { data = sortData[i], cell = movableCells[i] });
+            Vector2Int cell = movableCells[i];
+            int lockCount = lockCountsByCell != null && lockCountsByCell.TryGetValue(cell, out int count) ? count : 0;
+            assignments.Add(new SortAssignment { data = sortData[i], cell = cell, lockCount = lockCount });
         }
 
         BreakCompletedSortAssignments(assignments);
@@ -934,6 +956,7 @@ public class BoosterManager : Singleton<BoosterManager>
                 Vector3 targetPosition = manager.GetBoardWorldPosition(assignment.cell.x, assignment.cell.y);
 
                 piece.ApplySpawnData(assignment.data, false);
+                ApplyCellLockToPiece(piece, assignment.lockCount);
                 piece.SetPosInBoard(assignment.cell.x, assignment.cell.y);
                 piece.SetSnapPositionOnly(targetPosition);
                 manager.pieces[assignment.cell.x, assignment.cell.y] = piece;
@@ -966,6 +989,23 @@ public class BoosterManager : Singleton<BoosterManager>
                 }
             }
         });
+    }
+
+    void ApplyCellLockToPiece(Piece piece, int lockCount)
+    {
+        if (piece == null)
+        {
+            return;
+        }
+
+        if (lockCount > 0)
+        {
+            piece.SetLock(lockCount);
+        }
+        else
+        {
+            piece.ClearLock();
+        }
     }
 
     Vector3 GetBoardCenterWorldPosition(IngameManager manager)

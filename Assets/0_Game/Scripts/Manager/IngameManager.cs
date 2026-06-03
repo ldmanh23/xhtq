@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using DG.Tweening;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class IngameManager : SingletonMonoBehaviour<IngameManager>
 {
@@ -714,6 +715,27 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     public void BoosterSort()
     {
         BoosterManager.Instance.BoosterSort(this);
+    }
+
+    public void RestartLevel()
+    {
+        if (rebuildTween != null)
+        {
+            rebuildTween.Kill();
+            rebuildTween = null;
+        }
+
+        if (showHandTutTween != null)
+        {
+            showHandTutTween.Kill();
+            showHandTutTween = null;
+        }
+
+        isTimerRunning = false;
+        isGameEnded = true;
+        IsInputLocked = true;
+        Time.timeScale = 1f;
+        SceneManager.LoadScene(Constant.SCENE_GAMEPLAY);
     }
 
     public bool HasMergeablePairOnBoard()
