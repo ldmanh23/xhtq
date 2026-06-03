@@ -26,9 +26,13 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     internal Transform boardParent;
     Tween rebuildTween;
     Tween showHandTutTween;
+    float remainingTime;
     bool isResolvingComplete;
+    bool isTimerRunning;
+    bool isGameEnded;
 
     public bool IsInputLocked { get; internal set; }
+    public float RemainingTime => remainingTime;
 
     public struct SpawnPieceData
     {
@@ -42,6 +46,52 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
         EnsureGroupManager();
         UIManager.ins.OpenUI(UIID.UICGamePlay);
         BuildBoard();
+        StartLevelTimer();
+    }
+
+    private void Update()
+    {
+        UpdateLevelTimer();
+    }
+
+    void StartLevelTimer()
+    {
+        isGameEnded = false;
+        remainingTime = curLevel != null ? Mathf.Max(0, curLevel.timer) : 0;
+        isTimerRunning = remainingTime > 0;
+        UpdateTimerUI();
+    }
+
+    void UpdateLevelTimer()
+    {
+        if (!isTimerRunning || isGameEnded)
+        {
+            return;
+        }
+
+        remainingTime -= Time.deltaTime;
+        UpdateTimerUI();
+        if (remainingTime > 0)
+        {
+            return;
+        }
+
+        remainingTime = 0;
+        isTimerRunning = false;
+        UpdateTimerUI();
+        CheckLose();
+    }
+
+    void UpdateTimerUI()
+    {
+        CanvasGameplay gameplay = UIManager.ins != null
+            ? UIManager.ins.GetUI<CanvasGameplay>(UIID.UICGamePlay)
+            : null;
+
+        if (gameplay != null)
+        {
+            gameplay.SetTimer(remainingTime);
+        }
     }
 
     void EnsureGroupManager()
@@ -211,6 +261,7 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     }
 
     internal bool IsResolvingCompleteForBooster => isResolvingComplete;
+    internal bool IsGameEndedForBooster => isGameEnded;
 
     internal void RebuildGroupsAfterMove()
     {
@@ -226,7 +277,10 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             {
                 CheckWin();
 
-                IsInputLocked = false;
+                if (!isGameEnded)
+                {
+                    IsInputLocked = false;
+                }
             }
             rebuildTween = null;
         });
@@ -340,7 +394,10 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
         rebuildTween = DOVirtual.DelayedCall(PieceMoveDuration, () =>
         {
-            IsInputLocked = false;
+            if (!isGameEnded)
+            {
+                IsInputLocked = false;
+            }
             rebuildTween = null;
         });
     }
@@ -677,12 +734,36 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
 
     public void CheckWin()
     {
-        if (IsWin())
+        if (isGameEnded || !IsWin())
         {
-            UIManager.ins.OpenUI(UIID.UICVictory);
-            DataManager.ins.dt.level++;
-            Debug.Log("You win!");
+            return;
         }
+
+        isGameEnded = true;
+        isTimerRunning = false;
+        IsInputLocked = true;
+        UIManager.ins.OpenUI(UIID.UICVictory);
+        DataManager.ins.dt.level++;
+        Debug.Log("You win!");
+    }
+
+    public bool IsLose()
+    {
+        return !isGameEnded && curLevel != null && curLevel.timer > 0 && remainingTime <= 0 && !IsWin();
+    }
+
+    public void CheckLose()
+    {
+        if (!IsLose())
+        {
+            return;
+        }
+
+        isGameEnded = true;
+        isTimerRunning = false;
+        IsInputLocked = true;
+        UIManager.ins.OpenUI(UIID.UICFail);
+        Debug.Log("You lose!");
     }
 }
 

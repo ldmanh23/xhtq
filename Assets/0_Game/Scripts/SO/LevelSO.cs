@@ -6,6 +6,7 @@ public class LevelSO : ScriptableObject
 {
     public Vector2Int boardSize = new Vector2Int(6, 6);
     public int initialPieceCount;
+    public int timer = 180;
     public bool shufflePieces = true;
     public bool lockTopRows;
 

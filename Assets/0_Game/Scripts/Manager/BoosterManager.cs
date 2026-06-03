@@ -912,10 +912,13 @@ public class BoosterManager : Singleton<BoosterManager>
             }
 
             manager.RebuildGroupsForBooster();
-            if (!manager.IsResolvingCompleteForBooster)
+            if (!manager.IsResolvingCompleteForBooster && !manager.IsGameEndedForBooster)
             {
                 manager.CheckWin();
-                manager.IsInputLocked = false;
+                if (!manager.IsGameEndedForBooster)
+                {
+                    manager.IsInputLocked = false;
+                }
             }
         });
     }
