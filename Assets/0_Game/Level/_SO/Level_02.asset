@@ -14,8 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   boardSize: {x: 6, y: 6}
   initialPieceCount: 0
+  timer: 180
   shufflePieces: 1
-  lockTopRows: 0
+  lockTopRows: 1
   resourcesImageFolder: LevelImg/1
   imageCount: 16
   hasLockPieces: 0

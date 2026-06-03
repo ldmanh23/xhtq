@@ -656,6 +656,17 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
             && cell.y >= height - lockedTopRows;
     }
 
+    public void UnlockTopLockedRows()
+    {
+        if (lockedTopRows <= 0)
+        {
+            return;
+        }
+
+        lockedTopRows = 0;
+        RebuildGroups();
+    }
+
     internal Vector2 GetPieceSize(Piece piece)
     {
         if (piece == null || piece.spriteRenderer == null || piece.spriteRenderer.sprite == null)
@@ -703,6 +714,81 @@ public class IngameManager : SingletonMonoBehaviour<IngameManager>
     public void BoosterSort()
     {
         BoosterManager.Instance.BoosterSort(this);
+    }
+
+    public bool HasMergeablePairOnBoard()
+    {
+        if (pieces == null)
+        {
+            return false;
+        }
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                Piece piece = pieces[x, y];
+                if (!CanCheckMergeablePairPiece(piece))
+                {
+                    continue;
+                }
+
+                if (CanMergeWithAnyBoardPiece(piece))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    bool CanMergeWithAnyBoardPiece(Piece piece)
+    {
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                Piece other = pieces[x, y];
+                if (other == piece || !CanCheckMergeablePairPiece(other) || piece.pictureSO != other.pictureSO)
+                {
+                    continue;
+                }
+
+                Vector2Int localDelta = other.localCell - piece.localCell;
+                if (Mathf.Abs(localDelta.x) + Mathf.Abs(localDelta.y) != 1)
+                {
+                    continue;
+                }
+
+                if (CanPlaceForMerge(piece, other, localDelta) || CanPlaceForMerge(other, piece, -localDelta))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    bool CanPlaceForMerge(Piece fixedPiece, Piece movingPiece, Vector2Int localDelta)
+    {
+        Vector2Int targetCell = fixedPiece.posInBoard + localDelta;
+        if (!IsInBoard(targetCell) || IsLockedRow(targetCell))
+        {
+            return false;
+        }
+
+        Piece targetPiece = pieces[targetCell.x, targetCell.y];
+        return targetPiece == movingPiece || targetPiece == null || !targetPiece.IsLock;
+    }
+
+    bool CanCheckMergeablePairPiece(Piece piece)
+    {
+        return piece != null
+            && !piece.IsLock
+            && !IsLockedRow(piece.posInBoard)
+            && piece.pictureSO != null;
     }
 
     public bool IsWin()

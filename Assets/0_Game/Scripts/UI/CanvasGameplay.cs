@@ -73,4 +73,9 @@ public class CanvasGameplay : UICanvas
         int remainSeconds = totalSeconds % 60;
         timerTxt.text = minutes.ToString("00") + ":" + remainSeconds.ToString("00");
     }
+
+    public void UnLockRowLockBtn()
+    {
+        IngameManager.ins.UnlockTopLockedRows();
+    }    
 }
